@@ -8,5 +8,6 @@ AI Agent for my daily routine.
 
 ```bash
 pip install -e ".[dev]"
-korail-watch --dep 서울 --arr 부산 --date 2026-09-20 --demo
+korail-watch-gui                                        # GUI
+korail-watch --dep 서울 --arr 부산 --date 2026-09-20 --demo  # CLI
 ```

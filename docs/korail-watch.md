@@ -85,7 +85,25 @@ cp .env.example .env                       # KORAIL_ID / KORAIL_PW / 텔레그�
 
 치환 문자열이 값 전체면 타입이 보존된다(`"{passengers}"` → `2`).
 
-## 3단계: 실행
+## 3단계: 실행 (GUI)
+
+```bash
+korail-watch-gui
+```
+
+![GUI](images/gui.png)
+
+- **경로**: 출발/도착역, 출발일(`2026-09-20`, `20260920`, `0920` 모두 허용), 시간대, 좌석, 인원
+- **조회 방식**: 기본 간격, 집중 구간, 요청 상한, 선점 여부, 스펙 파일 경로
+- **데모 모드**: `endpoints.json` 없이 알림·선점 흐름만 확인
+- 입력값은 `.korail-watch-gui.json` 에 저장되어 다음 실행 때 복원된다 (자격증명 제외 — 그건 `.env`)
+- **정지** 버튼은 긴 대기 중에도 즉시 먹힌다 (`stop_event.wait` 로 자므로)
+- 빈자리를 찾으면 로그가 강조되고 벨이 울리며 창이 앞으로 온다. 선점에 성공하면 팝업이 뜬다
+
+tkinter 가 없으면 안내 메시지가 뜬다. `sudo apt install python3-tk` (Debian/Ubuntu),
+`brew install python-tk` (macOS), Windows 는 설치 시 tcl/tk 옵션.
+
+## 3단계(대안): 실행 (CLI)
 
 ```bash
 # 취소표 사냥 (권장 형태)
@@ -134,13 +152,17 @@ korail-watch --dep 서울 --arr 부산 --date 2026-09-20 --demo
 | `korail_watch/poller.py` | 지터 폴링, 요청 예산, 백오프, 차단 시 중단, 알림 쿨다운 |
 | `korail_watch/notify.py` | 콘솔 / 텔레그램 |
 | `korail_watch/sources.py` | `TrainSource` 프로토콜과 테스트용 가짜 소스 |
+| `korail_watch/forms.py` | GUI 입력 검증 → RunSpec (위젯 없이 테스트 가능) |
+| `korail_watch/gui.py` | tkinter 창, 워커 스레드, 큐 펌프 |
 | `korail_watch/cli.py` | 인자 파싱, 조립 |
 
 ```bash
-pytest    # 80 tests
+pytest              # 119 tests (GUI 테스트는 tkinter 없으면 skip)
+xvfb-run -a pytest  # 헤드리스에서 GUI 테스트까지
 ```
 
-네트워크 없이 전부 돈다. HTTP 계층은 `httpx.MockTransport`로, 폴링 루프는 가상 시계로 검증한다.
+네트워크 없이 전부 돈다. HTTP 계층은 `httpx.MockTransport`로, 폴링 루프는 가상 시계로,
+GUI는 실제 Tk 창을 띄워 검증한다.
 
 ## 하지 않는 것
 

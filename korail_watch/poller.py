@@ -74,6 +74,17 @@ class PollerConfig:
         return min(self.backoff_base * (2 ** max(failures - 1, 0)), self.backoff_max)
 
 
+@dataclass(frozen=True)
+class PollProgress:
+    """조회 1회가 끝난 직후의 상태. GUI가 진행 표시에 쓴다."""
+
+    polls: int
+    trains_seen: int
+    matches: int
+    interval: float
+    next_delay: float
+
+
 @dataclass
 class PollResult:
     reason: StopReason
@@ -96,6 +107,8 @@ class Poller:
         clock=_time.monotonic,
         now=datetime.now,
         rng: random.Random | None = None,
+        stop_event=None,
+        on_poll=None,
     ) -> None:
         self.source = source
         self.criteria = criteria
@@ -106,6 +119,8 @@ class Poller:
         self._clock = clock
         self._now = now
         self._rng = rng or random.Random()
+        self._stop_event = stop_event
+        self._on_poll = on_poll
         self._last_notified: dict[str, float] = {}
 
     def run(self) -> PollResult:
@@ -114,6 +129,9 @@ class Poller:
         failures = 0
 
         while self._clock() - started < self.config.max_duration:
+            if self._stopped():
+                result.reason = StopReason.INTERRUPTED
+                return result
             if result.polls >= self.config.max_requests:
                 result.reason = StopReason.BUDGET_SPENT
                 result.detail = (
@@ -161,9 +179,24 @@ class Poller:
                         result.reason = StopReason.RESERVED
                         return result
 
-            self._sleep(self.config.next_delay(self._rng, self._now()))
+            moment = self._now()
+            delay = self.config.next_delay(self._rng, moment)
+            if self._on_poll is not None:
+                self._on_poll(
+                    PollProgress(
+                        polls=result.polls,
+                        trains_seen=len(trains),
+                        matches=len(result.matches),
+                        interval=self.config.cadence.interval_at(moment),
+                        next_delay=delay,
+                    )
+                )
+            self._sleep(delay)
 
         return result
+
+    def _stopped(self) -> bool:
+        return self._stop_event is not None and self._stop_event.is_set()
 
     def _should_notify(self, train: Train) -> bool:
         now = self._clock()
