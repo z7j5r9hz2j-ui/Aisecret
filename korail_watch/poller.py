@@ -10,8 +10,10 @@ from __future__ import annotations
 import random
 import time as _time
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 
+from .cadence import MIN_INTERVAL, Cadence
 from .errors import AuthError, BlockedError, SpecError, TransientError
 from .models import Reservation, Train, WatchCriteria
 from .notify import Notifier
@@ -23,6 +25,7 @@ class StopReason(str, Enum):
     TIME_LIMIT = "최대 실행 시간 도달"
     BLOCKED = "차단 신호 감지 - 중단"
     TOO_MANY_ERRORS = "연속 오류 한도 초과"
+    BUDGET_SPENT = "요청 예산 소진"
     FATAL = "복구 불가 오류"
     INTERRUPTED = "사용자 중단"
 
@@ -30,13 +33,19 @@ class StopReason(str, Enum):
 @dataclass(frozen=True)
 class PollerConfig:
     interval: float = 45.0
-    """기본 조회 간격(초). 30초 밑으로는 내리지 말 것."""
+    """집중 구간 밖에서 쓰는 기본 조회 간격(초)."""
+
+    windows: tuple = ()
+    """취소표가 몰리는 시간대의 간격 예외. cadence.Window 들."""
 
     jitter: float = 0.4
     """간격에 곱해질 흔들림 비율. 0.4면 45초 ± 18초."""
 
     max_duration: float = 6 * 60 * 60
     """총 실행 상한(초). 무한 실행 금지."""
+
+    max_requests: int = 1200
+    """총 조회 요청 상한. 간격을 좁힐수록 이쪽이 먼저 걸리는 브레이크가 된다."""
 
     backoff_base: float = 30.0
     backoff_max: float = 600.0
@@ -45,14 +54,21 @@ class PollerConfig:
     """같은 열차를 다시 알리기까지의 최소 간격(초)."""
 
     def __post_init__(self) -> None:
-        if self.interval < 30:
-            raise ValueError("조회 간격은 30초 이상이어야 합니다.")
+        if self.interval < MIN_INTERVAL:
+            raise ValueError(f"조회 간격은 {MIN_INTERVAL:g}초 이상이어야 합니다.")
         if not 0 <= self.jitter < 1:
             raise ValueError("jitter는 0 이상 1 미만이어야 합니다.")
+        if self.max_requests < 1:
+            raise ValueError("max_requests는 1 이상이어야 합니다.")
 
-    def next_delay(self, rng: random.Random) -> float:
-        spread = self.interval * self.jitter
-        return max(1.0, self.interval + rng.uniform(-spread, spread))
+    @property
+    def cadence(self) -> Cadence:
+        return Cadence(base_interval=self.interval, windows=tuple(self.windows))
+
+    def next_delay(self, rng: random.Random, now: datetime | None = None) -> float:
+        interval = self.cadence.interval_at(now or datetime.now())
+        spread = interval * self.jitter
+        return max(1.0, interval + rng.uniform(-spread, spread))
 
     def backoff_delay(self, failures: int) -> float:
         return min(self.backoff_base * (2 ** max(failures - 1, 0)), self.backoff_max)
@@ -78,6 +94,7 @@ class Poller:
         reserve: bool = False,
         sleep=_time.sleep,
         clock=_time.monotonic,
+        now=datetime.now,
         rng: random.Random | None = None,
     ) -> None:
         self.source = source
@@ -87,6 +104,7 @@ class Poller:
         self.reserve_enabled = reserve
         self._sleep = sleep
         self._clock = clock
+        self._now = now
         self._rng = rng or random.Random()
         self._last_notified: dict[str, float] = {}
 
@@ -96,6 +114,13 @@ class Poller:
         failures = 0
 
         while self._clock() - started < self.config.max_duration:
+            if result.polls >= self.config.max_requests:
+                result.reason = StopReason.BUDGET_SPENT
+                result.detail = (
+                    f"조회 {result.polls}회로 상한에 도달했습니다. "
+                    "간격을 늘리거나 --max-requests 를 조정하세요."
+                )
+                return result
             try:
                 trains = self.source.search(self.criteria)
             except BlockedError as exc:
@@ -136,7 +161,7 @@ class Poller:
                         result.reason = StopReason.RESERVED
                         return result
 
-            self._sleep(self.config.next_delay(self._rng))
+            self._sleep(self.config.next_delay(self._rng, self._now()))
 
         return result
 

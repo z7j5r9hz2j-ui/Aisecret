@@ -64,3 +64,40 @@ def test_missing_spec_file_reports_error(capsys, tmp_path):
 
     assert code == 1
     assert "엔드포인트 스펙이 없습니다" in capsys.readouterr().err
+
+
+def test_cancel_hunt_preset_applies_burst_windows(capsys):
+    code = main([
+        "--dep", "서울", "--arr", "부산", "--date", "2026-09-20",
+        "--cancel-hunt", "--demo",
+    ])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "집중 구간" in out
+
+
+def test_explicit_windows_override_preset(capsys):
+    main([
+        "--dep", "서울", "--arr", "부산", "--date", "2026-09-20",
+        "--windows", "1200-1300@8", "--demo",
+    ])
+    out = capsys.readouterr().out
+
+    assert "12:00~13:00 8초" in out
+
+
+def test_bad_window_spec_exits_with_usage_error(capsys):
+    code = main([
+        "--dep", "서울", "--arr", "부산", "--date", "2026-09-20",
+        "--windows", "1200-1300@1", "--demo",
+    ])
+
+    assert code == 2
+    assert "이상이어야" in capsys.readouterr().err
+
+
+def test_notify_only_mode_warns_about_speed(capsys):
+    main(["--dep", "서울", "--arr", "부산", "--date", "2026-09-20", "--demo"])
+
+    assert "--reserve" in capsys.readouterr().out

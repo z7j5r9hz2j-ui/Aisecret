@@ -1,8 +1,9 @@
 import random
-from datetime import date, time
+from datetime import date, datetime, time
 
 import pytest
 
+from korail_watch.cadence import MIN_INTERVAL, Window
 from korail_watch.errors import AuthError, BlockedError, TransientError
 from korail_watch.models import Train, WatchCriteria
 from korail_watch.notify import RecordingNotifier
@@ -164,7 +165,44 @@ def test_reserve_failure_keeps_watching():
 
 def test_interval_below_floor_is_rejected():
     with pytest.raises(ValueError):
-        PollerConfig(interval=5)
+        PollerConfig(interval=4)
+    assert PollerConfig(interval=MIN_INTERVAL).interval == MIN_INTERVAL
+
+
+def test_request_budget_stops_the_loop():
+    config = PollerConfig(interval=5, jitter=0.0, max_duration=10_000, max_requests=20)
+    poller, source, _, _ = build([[]] * 100, config=config)
+    result = poller.run()
+
+    assert result.reason is StopReason.BUDGET_SPENT
+    assert source.search_calls == 20
+
+
+def test_burst_window_tightens_the_interval():
+    window = Window(start=time(23, 40), end=time(0, 25), interval=6)
+    config = PollerConfig(interval=45, jitter=0.0, windows=(window,), max_duration=100)
+
+    inside = config.next_delay(random.Random(0), datetime(2026, 9, 20, 23, 55))
+    outside = config.next_delay(random.Random(0), datetime(2026, 9, 20, 12, 0))
+
+    assert inside == 6
+    assert outside == 45
+
+
+def test_poller_uses_wall_clock_to_pick_the_interval():
+    window = Window(start=time(0, 0), end=time(0, 30), interval=5)
+    config = PollerConfig(interval=45, jitter=0.0, windows=(window,), max_duration=60)
+    clock = FakeClock()
+    source = FakeTrainSource([[]] * 50)
+    poller = Poller(
+        source, CRITERIA, RecordingNotifier(), config,
+        sleep=clock.sleep, clock=clock,
+        now=lambda: datetime(2026, 9, 20, 0, 10),
+        rng=random.Random(0),
+    )
+    poller.run()
+
+    assert clock.slept[:3] == [5.0, 5.0, 5.0], "집중 구간 안에서는 좁은 간격을 써야 한다"
 
 
 def test_jitter_keeps_delay_around_interval():

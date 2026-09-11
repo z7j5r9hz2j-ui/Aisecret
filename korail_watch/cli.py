@@ -11,6 +11,7 @@ from datetime import date, datetime, time
 from pathlib import Path
 
 from .api import EndpointSpec, KorailPlusClient
+from .cadence import DEFAULT_WINDOWS, MIN_INTERVAL, parse_windows
 from .errors import KorailWatchError
 from .models import Train, WatchCriteria
 from .notify import ConsoleNotifier, MultiNotifier, TelegramNotifier
@@ -55,8 +56,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--passengers", type=int, default=1, help="인원 수")
     p.add_argument("--trains", default="", help="열차명 제한, 쉼표 구분 (예: KTX,SRT)")
     p.add_argument("--spec", default="endpoints.json", help="엔드포인트 스펙 경로")
-    p.add_argument("--interval", type=float, default=45.0, help="조회 간격(초), 최소 30")
+    p.add_argument(
+        "--interval",
+        type=float,
+        default=45.0,
+        help=f"집중 구간 밖의 기본 조회 간격(초), 최소 {MIN_INTERVAL:g}",
+    )
+    p.add_argument(
+        "--windows",
+        default="",
+        help="취소표가 몰리는 시간대만 간격을 좁힌다. 예: 2340-0025@6,1800-2000@15",
+    )
+    p.add_argument(
+        "--cancel-hunt",
+        action="store_true",
+        help=f"취소표 사냥 프리셋. --windows '{DEFAULT_WINDOWS}' 와 같다",
+    )
     p.add_argument("--max-hours", type=float, default=6.0, help="최대 실행 시간")
+    p.add_argument(
+        "--max-requests", type=int, default=1200, help="총 조회 요청 상한"
+    )
     p.add_argument(
         "--reserve",
         action="store_true",
@@ -123,10 +142,18 @@ def main(argv: list[str] | None = None) -> int:
         train_names=tuple(t.strip() for t in args.trains.split(",") if t.strip()),
     )
 
-    config = PollerConfig(
-        interval=args.interval,
-        max_duration=args.max_hours * 3600,
-    )
+    window_spec = args.windows or (DEFAULT_WINDOWS if args.cancel_hunt else "")
+    try:
+        windows = parse_windows(window_spec) if window_spec else ()
+        config = PollerConfig(
+            interval=args.interval,
+            windows=windows,
+            max_duration=args.max_hours * 3600,
+            max_requests=args.max_requests,
+        )
+    except ValueError as exc:
+        print(f"오류: {exc}", file=sys.stderr)
+        return 2
     if args.demo:
         # 데모는 가상 시계로 도니 몇 번만 돌고 끝나게 한다.
         config = replace(config, max_duration=config.interval * 4)
@@ -135,11 +162,19 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"감시 시작: {criteria.dep_station} → {criteria.arr_station} "
         f"{criteria.travel_date:%Y-%m-%d} {time_from:%H:%M}~{time_to:%H:%M} "
-        f"/ {', '.join(criteria.seat_types)} {criteria.passengers}명 "
-        f"/ {config.interval:.0f}초 간격 / 최대 {args.max_hours:g}시간"
+        f"/ {', '.join(criteria.seat_types)} {criteria.passengers}명"
+    )
+    print(
+        f"조회: {config.cadence.describe()} "
+        f"/ 최대 {args.max_hours:g}시간 / 요청 상한 {config.max_requests}회"
     )
     if args.reserve:
         print("선점 모드: 빈자리를 찾으면 예약까지 시도합니다. 결제는 코레일+ 앱에서 직접 하세요.")
+    else:
+        print(
+            "알림 전용 모드입니다. 취소표는 알림을 보고 손으로 잡기엔 너무 빨리 사라지니,"
+            " 실제로 구하려면 --reserve 를 쓰세요."
+        )
 
     client = None
     clock = VirtualClock() if args.demo else None

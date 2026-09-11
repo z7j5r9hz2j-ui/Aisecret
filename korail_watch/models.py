@@ -61,14 +61,17 @@ class WatchCriteria:
         }
 
     @classmethod
-    def parse_time_range(cls, spec: str) -> tuple[time, time]:
-        """'0900-1330' 또는 '09:00-13:30' 형태를 파싱."""
+    def parse_time_range(cls, spec: str, *, allow_wrap: bool = False) -> tuple[time, time]:
+        """'0900-1330' 또는 '09:00-13:30' 형태를 파싱.
+
+        allow_wrap=True면 '2340-0025'처럼 자정을 넘는 구간을 허용한다.
+        """
         m = re.fullmatch(r"(\d{1,2}):?(\d{2})\s*-\s*(\d{1,2}):?(\d{2})", spec.strip())
         if not m:
             raise ValueError(f"시간대 형식이 잘못되었습니다: {spec!r} (예: 0900-1330)")
         h1, m1, h2, m2 = (int(g) for g in m.groups())
         start, end = time(h1, m1), time(h2, m2)
-        if start > end:
+        if start > end and not allow_wrap:
             raise ValueError(f"시작 시각이 종료 시각보다 늦습니다: {spec!r}")
         return start, end
 
