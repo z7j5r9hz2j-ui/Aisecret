@@ -45,6 +45,11 @@
 
 ## 1단계: API 파악 (직접 해야 하는 부분)
 
+> **PC 웹으로 하면 훨씬 쉽다.** KTX·SRT 통합 예매는 `www.korail.com` 에서도 되므로
+> 크롬 개발자도구로 기록하면 끝이다. 에뮬레이터·인증서·피닝 우회가 필요 없다.
+> → **[docs/capture-guide.md](capture-guide.md)** 를 따를 것. 아래 앱 캡처 방법은
+> 웹으로 안 될 때의 대안이다.
+
 `코레일+`는 2026년 8월 출시된 통합 앱이라 공개된 API 래퍼가 없다. 기존 오픈소스
 (`carpedm20/korail2`, `ryanking13/SRT`, `lapis42/srtgo`)는 전부 구 letskorail·SRT 엔드포인트
 기준이고 모두 아카이브·방치 상태다. 그래서 이 저장소에는 URL이 하드코딩돼 있지 않다.
@@ -155,9 +160,10 @@ korail-watch --dep 서울 --arr 부산 --date 2026-09-20 --demo
 | `korail_watch/forms.py` | GUI 입력 검증 → RunSpec (위젯 없이 테스트 가능) |
 | `korail_watch/gui.py` | tkinter 창, 워커 스레드, 큐 펌프 |
 | `korail_watch/cli.py` | 인자 파싱, 조립 |
+| `scripts/scrub_har.py` | HAR 에서 비밀번호·개인정보 제거 |
 
 ```bash
-pytest              # 119 tests (GUI 테스트는 tkinter 없으면 skip)
+pytest              # 127 tests (GUI 테스트는 tkinter 없으면 skip)
 xvfb-run -a pytest  # 헤드리스에서 GUI 테스트까지
 ```
 
