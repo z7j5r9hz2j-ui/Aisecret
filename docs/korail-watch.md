@@ -69,7 +69,9 @@
 ```bash
 pip install -e ".[dev]"
 cp endpoints.example.json endpoints.json   # 캡처한 값으로 채우기
-cp .env.example .env                       # KORAIL_ID / KORAIL_PW / 텔레그램 토큰
+cp .env.example .env                       # KORAIL_ID / KORAIL_PW
+python3 scripts/telegram_setup.py --token …  # 텔레그램 알림 (선택, 5분)
+                                           # → docs/telegram-setup.md
 ```
 
 `.env`와 `endpoints.json`은 `.gitignore`에 있다. 자격증명을 커밋하지 말 것.
@@ -161,9 +163,10 @@ korail-watch --dep 서울 --arr 부산 --date 2026-09-20 --demo
 | `korail_watch/gui.py` | tkinter 창, 워커 스레드, 큐 펌프 |
 | `korail_watch/cli.py` | 인자 파싱, 조립 |
 | `scripts/scrub_har.py` | HAR 에서 비밀번호·개인정보 제거 |
+| `scripts/telegram_setup.py` | 텔레그램 알림 확인·저장 |
 
 ```bash
-pytest              # 127 tests (GUI 테스트는 tkinter 없으면 skip)
+pytest              # 143 tests (GUI 테스트는 tkinter 없으면 skip)
 xvfb-run -a pytest  # 헤드리스에서 GUI 테스트까지
 ```
 
