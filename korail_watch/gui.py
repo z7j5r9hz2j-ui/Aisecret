@@ -18,10 +18,11 @@ from typing import Any
 
 from .api import EndpointSpec, KorailPlusClient
 from .cadence import DEFAULT_WINDOWS
+from .envfile import load_dotenv
 from .errors import KorailWatchError
 from .forms import DEFAULTS, SEAT_CHOICES, FormError, RunSpec, build_run_spec
 from .models import Train
-from .notify import MultiNotifier, TelegramNotifier
+from .notify import MultiNotifier, build_notifiers
 from .poller import Poller, PollProgress, StopReason
 from .sources import FakeTrainSource
 
@@ -54,17 +55,6 @@ def demo_source(spec: RunSpec) -> FakeTrainSource:
     return FakeTrainSource([[], [], [hit]])
 
 
-def load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
-
-
 def run_watch(
     spec: RunSpec,
     outbox: queue.Queue,
@@ -77,11 +67,10 @@ def run_watch(
     기본 sleep 은 stop_event.wait 이다. 긴 대기 중에도 정지 버튼이 즉시 먹히게
     하려는 것이고, sleep 인자는 테스트에서 실제로 잠들지 않게 할 때만 쓴다.
     """
-    notifiers: list[Any] = [QueueNotifier(outbox)]
-    token, chat_id = os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_CHAT_ID")
-    if token and chat_id:
-        notifiers.append(TelegramNotifier(token, chat_id))
-        outbox.put(("log", "텔레그램 알림도 함께 보냅니다."))
+    notifiers: list[Any] = build_notifiers(dict(os.environ), extra=[QueueNotifier(outbox)])
+    extra_channels = [type(n).__name__.replace("Notifier", "") for n in notifiers[1:]]
+    if extra_channels:
+        outbox.put(("log", f"알림 채널: {', '.join(extra_channels)} 로도 보냅니다."))
 
     client = None
     try:
@@ -320,6 +309,10 @@ class App:
         self.log_text.configure(state="disabled")
 
     def _report_credentials(self) -> None:
+        if os.getenv("KAKAO_ACCESS_TOKEN"):
+            self.log("카카오톡 알림이 설정되어 있습니다.")
+        elif os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"):
+            self.log("텔레그램 알림이 설정되어 있습니다.")
         if os.getenv("KORAIL_ID") and os.getenv("KORAIL_PW"):
             self.log("자격증명을 .env 에서 읽었습니다.")
         else:

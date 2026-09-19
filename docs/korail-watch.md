@@ -70,8 +70,8 @@
 pip install -e ".[dev]"
 cp endpoints.example.json endpoints.json   # 캡처한 값으로 채우기
 cp .env.example .env                       # KORAIL_ID / KORAIL_PW
-python3 scripts/telegram_setup.py --token …  # 텔레그램 알림 (선택, 5분)
-                                           # → docs/telegram-setup.md
+python3 scripts/kakao_setup.py --key …       # 카카오톡 알림 → docs/kakao-setup.md
+python3 scripts/telegram_setup.py --token …  # 텔레그램 알림 → docs/telegram-setup.md
 ```
 
 `.env`와 `endpoints.json`은 `.gitignore`에 있다. 자격증명을 커밋하지 말 것.
@@ -157,16 +157,18 @@ korail-watch --dep 서울 --arr 부산 --date 2026-09-20 --demo
 | `korail_watch/api.py` | 스펙 구동 HTTP 클라이언트. 결제 메서드 없음 |
 | `korail_watch/cadence.py` | 시간대별 조회 간격, 간격 하한 |
 | `korail_watch/poller.py` | 지터 폴링, 요청 예산, 백오프, 차단 시 중단, 알림 쿨다운 |
-| `korail_watch/notify.py` | 콘솔 / 텔레그램 |
+| `korail_watch/notify.py` | 콘솔 / 카카오톡 / 텔레그램 |
 | `korail_watch/sources.py` | `TrainSource` 프로토콜과 테스트용 가짜 소스 |
 | `korail_watch/forms.py` | GUI 입력 검증 → RunSpec (위젯 없이 테스트 가능) |
 | `korail_watch/gui.py` | tkinter 창, 워커 스레드, 큐 펌프 |
 | `korail_watch/cli.py` | 인자 파싱, 조립 |
 | `scripts/scrub_har.py` | HAR 에서 비밀번호·개인정보 제거 |
 | `scripts/telegram_setup.py` | 텔레그램 알림 확인·저장 |
+| `scripts/kakao_setup.py` | 카카오톡 알림 인증·저장 |
+| `korail_watch/envfile.py` | `.env` 읽기/쓰기 (토큰 갱신용) |
 
 ```bash
-pytest              # 143 tests (GUI 테스트는 tkinter 없으면 skip)
+pytest              # 164 tests (GUI 테스트는 tkinter 없으면 skip)
 xvfb-run -a pytest  # 헤드리스에서 GUI 테스트까지
 ```
 

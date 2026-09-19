@@ -12,23 +12,12 @@ from pathlib import Path
 
 from .api import EndpointSpec, KorailPlusClient
 from .cadence import DEFAULT_WINDOWS, MIN_INTERVAL, parse_windows
+from .envfile import load_dotenv
 from .errors import KorailWatchError
 from .models import Train, WatchCriteria
-from .notify import ConsoleNotifier, MultiNotifier, TelegramNotifier
+from .notify import ConsoleNotifier, MultiNotifier, build_notifiers
 from .poller import Poller, PollerConfig, StopReason
 from .sources import FakeTrainSource
-
-
-def load_dotenv(path: Path) -> None:
-    """의존성 없이 .env를 읽는다. 이미 설정된 환경변수는 덮어쓰지 않는다."""
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
 def parse_date(value: str) -> date:
@@ -86,12 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_notifier() -> MultiNotifier:
-    notifiers = [ConsoleNotifier()]
-    token, chat_id = os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_CHAT_ID")
-    if token and chat_id:
-        notifiers.append(TelegramNotifier(token, chat_id))
-    else:
-        print("[안내] 텔레그램 설정이 없어 콘솔로만 알립니다.", file=sys.stderr)
+    notifiers = build_notifiers(dict(os.environ), extra=[ConsoleNotifier()])
+    if len(notifiers) == 1:
+        print(
+            "[안내] 카카오톡·텔레그램 설정이 없어 콘솔로만 알립니다. "
+            "scripts/kakao_setup.py 를 참고하세요.",
+            file=sys.stderr,
+        )
     return MultiNotifier(*notifiers)
 
 

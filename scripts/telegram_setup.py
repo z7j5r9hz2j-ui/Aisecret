@@ -16,23 +16,15 @@ from pathlib import Path
 
 import httpx
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from korail_watch.envfile import ENV_PATH, load_dotenv, upsert_env  # noqa: E402
+
 API = "https://api.telegram.org"
-ENV_PATH = Path(".env")
 
 
 class SetupError(Exception):
     """사용자가 고칠 수 있는 문제. 무엇을 해야 하는지 함께 알려준다."""
-
-
-def load_dotenv(path: Path = ENV_PATH) -> None:
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
 def call(client: httpx.Client, token: str, method: str, **params):
@@ -98,22 +90,6 @@ def send_test(client: httpx.Client, token: str, chat_id: str) -> None:
             "빈자리를 찾거나 좌석을 선점하면 여기로 알려드립니다."
         ),
     )
-
-
-def upsert_env(path: Path, values: dict[str, str]) -> None:
-    """.env 의 키를 갱신하거나 없으면 추가한다. 다른 줄은 건드리지 않는다."""
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    remaining = dict(values)
-    out = []
-    for line in lines:
-        key = line.split("=", 1)[0].strip()
-        if key in remaining:
-            out.append(f"{key}={remaining.pop(key)}")
-        else:
-            out.append(line)
-    for key, value in remaining.items():
-        out.append(f"{key}={value}")
-    path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
 def resolve_chat_id(client: httpx.Client, token: str, given: str, stream=None) -> str:
