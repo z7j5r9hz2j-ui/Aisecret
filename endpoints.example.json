@@ -1,0 +1,59 @@
+{
+  "_주의": "여기 값은 전부 자리표시자입니다. mitmproxy로 직접 캡처한 값으로 바꿔야 동작합니다.",
+  "base_url": "",
+  "headers": {
+    "User-Agent": "캡처한 앱의 User-Agent를 그대로",
+    "Accept": "application/json",
+    "Content-Type": "application/json"
+  },
+  "block_indicators": ["매크로", "비정상", "차단", "자동화"],
+
+  "login": {
+    "method": "POST",
+    "path": "/캡처한/로그인/경로",
+    "json": { "userId": "{login_id}", "password": "{password}" },
+    "success_path": "resultCode",
+    "token_path": "data.accessToken",
+    "auth_header": "Authorization",
+    "auth_format": "Bearer {token}"
+  },
+
+  "search": {
+    "method": "POST",
+    "path": "/캡처한/열차조회/경로",
+    "json": {
+      "depStation": "{dep_station}",
+      "arrStation": "{arr_station}",
+      "depDate": "{date}",
+      "depTime": "{time}",
+      "adultCount": "{passengers}"
+    },
+    "list_path": "data.trainList",
+    "fields": {
+      "train_no": "trainNo",
+      "train_name": "trainName",
+      "dep_station": "depStationName",
+      "arr_station": "arrStationName",
+      "dep_time": "depTime",
+      "arr_time": "arrTime"
+    },
+    "seat_fields": { "일반실": "generalSeatStatus", "특실": "specialSeatStatus" },
+    "seat_available_values": ["예약가능", "Y", "1"]
+  },
+
+  "reserve": {
+    "method": "POST",
+    "path": "/캡처한/좌석선점/경로",
+    "json": {
+      "trainNo": "{train_no}",
+      "depStation": "{dep_station}",
+      "arrStation": "{arr_station}",
+      "depDate": "{date}",
+      "depTime": "{dep_time}",
+      "seatType": "{seat_type}",
+      "adultCount": "{passengers}"
+    },
+    "reservation_no_path": "data.reservationNo",
+    "deadline_path": "data.payLimitTime"
+  }
+}

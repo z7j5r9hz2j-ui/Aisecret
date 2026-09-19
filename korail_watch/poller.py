@@ -1,0 +1,223 @@
+"""저빈도 폴링 루프.
+
+설계 원칙 두 가지.
+1) 고정 간격으로 때리지 않는다. 지터를 섞어 사람 손에 가까운 간격을 유지한다.
+2) 차단 신호를 만나면 우회하지 않고 멈춘다. 재시도로 뚫는 코드는 넣지 않았다.
+"""
+
+from __future__ import annotations
+
+import random
+import time as _time
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+
+from .cadence import MIN_INTERVAL, Cadence
+from .errors import AuthError, BlockedError, SpecError, TransientError
+from .models import Reservation, Train, WatchCriteria
+from .notify import Notifier
+from .sources import TrainSource
+
+
+class StopReason(str, Enum):
+    RESERVED = "좌석 선점 완료"
+    TIME_LIMIT = "최대 실행 시간 도달"
+    BLOCKED = "차단 신호 감지 - 중단"
+    TOO_MANY_ERRORS = "연속 오류 한도 초과"
+    BUDGET_SPENT = "요청 예산 소진"
+    FATAL = "복구 불가 오류"
+    INTERRUPTED = "사용자 중단"
+
+
+@dataclass(frozen=True)
+class PollerConfig:
+    interval: float = 45.0
+    """집중 구간 밖에서 쓰는 기본 조회 간격(초)."""
+
+    windows: tuple = ()
+    """취소표가 몰리는 시간대의 간격 예외. cadence.Window 들."""
+
+    jitter: float = 0.4
+    """간격에 곱해질 흔들림 비율. 0.4면 45초 ± 18초."""
+
+    max_duration: float = 6 * 60 * 60
+    """총 실행 상한(초). 무한 실행 금지."""
+
+    max_requests: int = 1200
+    """총 조회 요청 상한. 간격을 좁힐수록 이쪽이 먼저 걸리는 브레이크가 된다."""
+
+    backoff_base: float = 30.0
+    backoff_max: float = 600.0
+    max_transient_failures: int = 5
+    notify_cooldown: float = 600.0
+    """같은 열차를 다시 알리기까지의 최소 간격(초)."""
+
+    def __post_init__(self) -> None:
+        if self.interval < MIN_INTERVAL:
+            raise ValueError(f"조회 간격은 {MIN_INTERVAL:g}초 이상이어야 합니다.")
+        if not 0 <= self.jitter < 1:
+            raise ValueError("jitter는 0 이상 1 미만이어야 합니다.")
+        if self.max_requests < 1:
+            raise ValueError("max_requests는 1 이상이어야 합니다.")
+
+    @property
+    def cadence(self) -> Cadence:
+        return Cadence(base_interval=self.interval, windows=tuple(self.windows))
+
+    def next_delay(self, rng: random.Random, now: datetime | None = None) -> float:
+        interval = self.cadence.interval_at(now or datetime.now())
+        spread = interval * self.jitter
+        return max(1.0, interval + rng.uniform(-spread, spread))
+
+    def backoff_delay(self, failures: int) -> float:
+        return min(self.backoff_base * (2 ** max(failures - 1, 0)), self.backoff_max)
+
+
+@dataclass(frozen=True)
+class PollProgress:
+    """조회 1회가 끝난 직후의 상태. GUI가 진행 표시에 쓴다."""
+
+    polls: int
+    trains_seen: int
+    matches: int
+    interval: float
+    next_delay: float
+
+
+@dataclass
+class PollResult:
+    reason: StopReason
+    polls: int = 0
+    matches: list[tuple[Train, str]] = field(default_factory=list)
+    reservation: Reservation | None = None
+    detail: str = ""
+
+
+class Poller:
+    def __init__(
+        self,
+        source: TrainSource,
+        criteria: WatchCriteria,
+        notifier: Notifier,
+        config: PollerConfig | None = None,
+        *,
+        reserve: bool = False,
+        sleep=_time.sleep,
+        clock=_time.monotonic,
+        now=datetime.now,
+        rng: random.Random | None = None,
+        stop_event=None,
+        on_poll=None,
+    ) -> None:
+        self.source = source
+        self.criteria = criteria
+        self.notifier = notifier
+        self.config = config or PollerConfig()
+        self.reserve_enabled = reserve
+        self._sleep = sleep
+        self._clock = clock
+        self._now = now
+        self._rng = rng or random.Random()
+        self._stop_event = stop_event
+        self._on_poll = on_poll
+        self._last_notified: dict[str, float] = {}
+
+    def run(self) -> PollResult:
+        started = self._clock()
+        result = PollResult(reason=StopReason.TIME_LIMIT)
+        failures = 0
+
+        while self._clock() - started < self.config.max_duration:
+            if self._stopped():
+                result.reason = StopReason.INTERRUPTED
+                return result
+            if result.polls >= self.config.max_requests:
+                result.reason = StopReason.BUDGET_SPENT
+                result.detail = (
+                    f"조회 {result.polls}회로 상한에 도달했습니다. "
+                    "간격을 늘리거나 --max-requests 를 조정하세요."
+                )
+                return result
+            try:
+                trains = self.source.search(self.criteria)
+            except BlockedError as exc:
+                result.reason, result.detail = StopReason.BLOCKED, str(exc)
+                self.notifier.send("감시 중단: 차단 신호", str(exc))
+                return result
+            except (AuthError, SpecError) as exc:
+                result.reason, result.detail = StopReason.FATAL, str(exc)
+                self.notifier.send("감시 중단: 설정 오류", str(exc))
+                return result
+            except TransientError as exc:
+                failures += 1
+                if failures > self.config.max_transient_failures:
+                    result.reason, result.detail = StopReason.TOO_MANY_ERRORS, str(exc)
+                    self.notifier.send("감시 중단: 연속 오류", str(exc))
+                    return result
+                self._sleep(self.config.backoff_delay(failures))
+                continue
+            except KeyboardInterrupt:
+                result.reason = StopReason.INTERRUPTED
+                return result
+
+            failures = 0
+            result.polls += 1
+
+            for train in trains:
+                available = self.criteria.matches(train)
+                if not available:
+                    continue
+                seat_type = next(iter(available))
+                result.matches.append((train, seat_type))
+                if self._should_notify(train):
+                    self.notifier.send("빈자리 발견", str(train))
+                if self.reserve_enabled:
+                    reservation = self._try_reserve(train, seat_type)
+                    if reservation is not None:
+                        result.reservation = reservation
+                        result.reason = StopReason.RESERVED
+                        return result
+
+            moment = self._now()
+            delay = self.config.next_delay(self._rng, moment)
+            if self._on_poll is not None:
+                self._on_poll(
+                    PollProgress(
+                        polls=result.polls,
+                        trains_seen=len(trains),
+                        matches=len(result.matches),
+                        interval=self.config.cadence.interval_at(moment),
+                        next_delay=delay,
+                    )
+                )
+            self._sleep(delay)
+
+        return result
+
+    def _stopped(self) -> bool:
+        return self._stop_event is not None and self._stop_event.is_set()
+
+    def _should_notify(self, train: Train) -> bool:
+        now = self._clock()
+        last = self._last_notified.get(train.key)
+        if last is not None and now - last < self.config.notify_cooldown:
+            return False
+        self._last_notified[train.key] = now
+        return True
+
+    def _try_reserve(self, train: Train, seat_type: str) -> Reservation | None:
+        try:
+            reservation = self.source.reserve(train, seat_type, self.criteria)
+        except BlockedError:
+            raise
+        except Exception as exc:  # 선점 실패는 흔하다(그 사이 팔림). 감시를 계속한다.
+            self.notifier.send("선점 실패", f"{train}\n사유: {exc}")
+            return None
+        self.notifier.send(
+            "좌석 선점 완료 - 결제 필요",
+            f"{train}\n좌석: {seat_type}\n예약번호: {reservation.reservation_no}\n"
+            f"결제 기한: {reservation.pay_deadline}\n"
+            "코레일+ 앱에서 직접 결제하세요. 기한이 지나면 자동 취소됩니다.",
+        )
+        return reservation
