@@ -22,4 +22,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Push main to gh-pages
-        run: git push --force origin HEAD:refs/heads/gh-pages
+        run: |
+          # 업데이트 뒤 옛 CSS/JS가 캐시에서 섞여 나오지 않도록 파일 주소에 버전을 붙인다
+          sed -i "s/?v=dev/?v=${GITHUB_SHA::7}/g" index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Deploy ${GITHUB_SHA::7}" --allow-empty
+          git push --force origin HEAD:refs/heads/gh-pages
