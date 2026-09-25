@@ -181,3 +181,4 @@ dialog input, dialog select, dialog textarea {
 .sync-status.error { color: var(--danger); }
 .sync-status:empty { display: none; }
 .sms-actions { display: flex; gap: 8px; }
+.tx-amount.neg { color: var(--ok); }
