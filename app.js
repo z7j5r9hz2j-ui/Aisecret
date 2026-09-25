@@ -14,7 +14,7 @@ const CATEGORIES = [
 const CATEGORY_RULES = [
   ["카페·간식", /스타벅스|커피|카페|투썸|이디야|메가|빽다방|컴포즈|폴바셋|베이커리|파리바게|뚜레쥬르|배스킨|던킨|디저트/],
   ["생활·마트", /이마트|홈플러스|롯데마트|코스트코|트레이더스|마트|다이소|GS25|지에스25|CU|씨유|세븐일레븐|이마트24|편의점|올리브영/i],
-  ["식비", /식당|김밥|치킨|피자|버거|맥도날드|롯데리아|KFC|서브웨이|배달의민족|배민|요기요|쿠팡이츠|국밥|분식|한식|중식|일식|고기|초밥|반점/i],
+  ["식비", /식당|김밥|치킨|피자|버거|맥도날드|롯데리아|KFC|서브웨이|배달의민족|배민|우아한형제들|요기요|위대한상상|쿠팡이츠|국밥|분식|한식|중식|일식|고기|초밥|반점/i],
   ["교통", /택시|카카오T|카카오모빌리티|티머니|버스|지하철|코레일|KTX|SRT|주유|오일|에너지|GS칼텍스|SK에너지|S-OIL|주차|하이패스|고속도로/i],
   ["쇼핑", /쿠팡|11번가|G마켓|지마켓|옥션|네이버페이|무신사|SSG|신세계|현대백화점|롯데백화점|아울렛|29CM|에이블리|지그재그/i],
   ["주거·통신", /SKT|KT|LG유플러스|유플러스|통신|관리비|전기|가스|수도|인터넷/i],
@@ -63,6 +63,8 @@ const shortWon = (n) => {
 };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const isCard = (t) => t.method === CARD_METHOD;
+// 카드 내역의 "㈜우아한형제들" 같은 법인 표기 제거
+const cleanMerchant = (s) => String(s || "").replace(/㈜|\(주\)|주식회사/g, "").trim();
 const normName = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -363,7 +365,7 @@ function parseSheet(rows) {
     const tm = (col.time >= 0 ? String(r[col.time]) : String(rawDate)).match(/(\d{1,2}):(\d{2})/);
     if (tm) time = `${pad(tm[1])}:${tm[2]}`;
     const status = col.status >= 0 ? String(r[col.status]) : "";
-    const merchant = col.merchant >= 0 ? String(r[col.merchant]).trim() : "삼성카드 결제";
+    const merchant = col.merchant >= 0 ? cleanMerchant(r[col.merchant]) : "삼성카드 결제";
     const inst = col.installment >= 0 ? String(r[col.installment]).trim() : "";
     out.push({
       date, time, merchant: merchant || "삼성카드 결제",
@@ -395,7 +397,7 @@ function parseSms(text) {
     out.push({
       date: guessYear(+dt[1], +dt[2]),
       time: `${pad(dt[3])}:${dt[4]}`,
-      merchant,
+      merchant: cleanMerchant(merchant) || "삼성카드 결제",
       amount: Math.abs(parseAmount(amt[1])),
       installment: inst ? `${+inst[1]}개월` : /일시불/.test(clean) ? "일시불" : "",
       cancel: m[1] !== "승인",
