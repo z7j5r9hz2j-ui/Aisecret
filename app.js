@@ -410,7 +410,10 @@ function parseSms(text) {
     // 누적 금액은 무시: "누적" 부터 그 줄 끝까지 지운다 (누적금액, 누적: 등 표기 포함)
     const clean = chunk.replace(/누적[^\n]*/g, "");
     const kind = m[1] || m[2];
-    const tx = kind ? parseApproval(clean, kind) : /후불교통/.test(clean) ? parseTransit(clean) : null;
+    const tx = kind ? parseApproval(clean, kind)
+      : /후불교통/.test(clean) ? parseTransit(clean)
+      : /자동결제|정기결제|자동납부/.test(clean) ? parseAutoPay(clean.slice(m[0].length))
+      : null; // 결제예정금액 안내 같은 다른 문자는 지출이 아니므로 무시
     if (tx) out.push({ ...tx, source: "sms" });
   });
   return out;
@@ -434,6 +437,29 @@ function parseApproval(clean, kind) {
     amount: Math.abs(parseAmount(amt[1])),
     installment: inst ? `${+inst[1]}개월` : /일시불/.test(clean) ? "일시불" : "",
     cancel: kind !== "승인",
+  };
+}
+
+// 자동결제 문자: "자동결제 09/14접수 / KT 유선상품 자동(5905) / 37,400원"
+function parseAutoPay(body) {
+  const amt = body.match(/([\d,]+)\s*원/);
+  const dt = body.match(/(\d{1,2})\/(\d{1,2})/);
+  if (!amt || !dt) return null;
+  const tm = body.match(/(\d{1,2}):(\d{2})/);
+  // 날짜·금액·"자동결제" 줄을 빼고 남은 첫 줄이 가맹점
+  const line = body.split("\n").map((l) => l.trim())
+    .find((l) => l && !/\d{1,2}\/\d{1,2}/.test(l) && !/[\d,]+\s*원/.test(l) && !/^(자동결제|정기결제|자동납부)/.test(l))
+    // 한 줄로 온 문자: 날짜 뒤부터 금액 앞까지
+    || body.slice(dt.index + dt[0].length, amt.index).replace(/^\s*(접수|승인)/, "").replace(/\d{1,2}:\d{2}/, "").trim();
+  // "KT 유선상품 자동(5905)" → "KT 유선상품"
+  const merchant = cleanMerchant(String(line || "").replace(/\s*(자동)?\s*\(\d+\)\s*$/, "").replace(/\s*자동$/, ""));
+  return {
+    date: guessYear(+dt[1], +dt[2]),
+    time: tm ? `${pad(tm[1])}:${tm[2]}` : "",
+    merchant: merchant || "자동결제",
+    amount: parseAmount(amt[1]),
+    installment: "",
+    cancel: false,
   };
 }
 
