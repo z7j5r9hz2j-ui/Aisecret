@@ -11,6 +11,7 @@
   <header class="topbar">
     <h1>나만의 가계부</h1>
     <div class="top-actions">
+      <button id="btn-sync" class="btn sync-btn">동기화 설정</button>
       <button id="btn-import" class="btn">삼성카드 불러오기</button>
       <button id="btn-add" class="btn primary">+ 지출 입력</button>
     </div>
@@ -122,8 +123,33 @@
     </div>
   </dialog>
 
+  <!-- PC·휴대폰 동기화 -->
+  <dialog id="sync-dialog">
+    <form id="sync-form" method="dialog">
+      <h3>PC·휴대폰 동기화</h3>
+      <p class="hint">내역을 나만 볼 수 있는 <b>비공개 GitHub 저장소</b>에 저장해서, 연결한 모든 기기가 같은 내역을 봐요. 기기마다 한 번씩 연결하면 돼요.</p>
+      <ol class="steps">
+        <li><a href="https://github.com/new?name=ledger-data&amp;visibility=private" target="_blank" rel="noopener">비공개 저장소 만들기</a> — 이름 <code>ledger-data</code>, <b>Private</b> 선택 (처음 한 번만)</li>
+        <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">토큰 만들기</a> — Repository access: <b>Only select repositories → ledger-data</b>, Permissions: <b>Contents → Read and write</b></li>
+        <li>아래에 저장소와 토큰을 입력 (휴대폰에서도 같은 토큰을 쓰면 돼요)</li>
+      </ol>
+      <label>저장소<input type="text" name="repo" placeholder="아이디/ledger-data" autocomplete="off" required /></label>
+      <label>토큰<input type="password" name="token" autocomplete="off" /></label>
+      <p id="sync-status" class="sync-status"></p>
+      <p class="hint">토큰은 이 기기의 브라우저에만 저장돼요. 기기를 잃어버리면 GitHub에서 토큰을 삭제하세요.</p>
+      <div class="dialog-actions">
+        <button type="button" id="sync-disconnect" class="btn danger" hidden>연결 끊기</button>
+        <span class="spacer"></span>
+        <button type="button" id="sync-now" class="btn" hidden>동기화</button>
+        <button type="button" class="btn" data-close>닫기</button>
+        <button type="submit" class="btn primary">연결</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" hidden></div>
 
   <script src="app.js"></script>
+  <script src="sync.js"></script>
 </body>
 </html>
