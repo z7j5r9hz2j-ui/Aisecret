@@ -85,7 +85,7 @@ const shortWon = (n) => {
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const isCard = (t) => t.method === CARD_METHOD;
 // 카드 내역의 "㈜우아한형제들" 같은 법인 표기 제거
-const cleanMerchant = (s) => String(s || "").replace(/㈜|\(주\)|주식회사/g, "").trim();
+const cleanMerchant = (s) => String(s || "").replace(/㈜|\(주\)|주식회사/g, "").trim().replace(/_+$/, "");
 const normName = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -206,11 +206,12 @@ function renderSummary() {
   $("#sum-avg").textContent = won(total / daysElapsed);
 
   const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  const max = sorted[0]?.[1] || 1;
+  // 취소가 더 많아 마이너스가 된 카테고리는 막대를 그리지 않는다
+  const max = Math.max(1, ...sorted.map(([, v]) => v));
   $("#cat-list").innerHTML = sorted.length
     ? sorted.map(([c, v]) => `
         <li><div class="cat-row"><span>${escapeHtml(c)}</span><span>${won(v)}</span></div>
-        <div class="cat-bar"><div style="width:${Math.max(0, (v / max) * 100)}%"></div></div></li>`).join("")
+        <div class="cat-bar"><div style="width:${(Math.max(0, v) / max) * 100}%"></div></div></li>`).join("")
     : `<li class="tx-sub">이번 달 내역이 없어요</li>`;
 }
 
@@ -230,7 +231,7 @@ function renderDay() {
             <div class="tx-merchant">${escapeHtml(t.merchant)}</div>
             <div class="tx-sub">${escapeHtml(t.category)}${t.time ? " · " + t.time : ""}${t.installment ? " · " + escapeHtml(t.installment) : ""}${t.memo ? " · " + escapeHtml(t.memo) : ""}</div>
           </div>
-          <span class="tx-amount">${won(t.amount)}</span>
+          <span class="tx-amount${t.amount < 0 ? " neg" : ""}">${won(t.amount)}</span>
         </li>`).join("")
     : `<li class="empty">내역이 없어요</li>`;
 }
@@ -424,7 +425,8 @@ function parseSms(text) {
 // 승인/승인취소 문자
 function parseApproval(clean, kind) {
   const amt = clean.match(/(-?[\d,]+)\s*원/);
-  const dt = clean.match(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
+  // 취소 문자는 시간 없이 "09/07 가맹점" 으로만 오기도 한다
+  const dt = clean.match(/(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?/);
   if (!amt || !dt) return null;
   let merchant = clean.slice(dt.index + dt[0].length).split("\n")[0].trim();
   if (!merchant) {
@@ -434,9 +436,10 @@ function parseApproval(clean, kind) {
   const inst = clean.match(/(\d{1,2})\s*개월/);
   return {
     date: guessYear(+dt[1], +dt[2]),
-    time: `${pad(dt[3])}:${dt[4]}`,
+    time: dt[3] ? `${pad(dt[3])}:${dt[4]}` : "",
     merchant: cleanMerchant(merchant) || "삼성카드 결제",
-    amount: Math.abs(parseAmount(amt[1])),
+    // 취소는 마이너스 금액으로 기록해서 합계에서 빠지게 한다
+    amount: (kind === "승인" ? 1 : -1) * Math.abs(parseAmount(amt[1])),
     installment: inst ? `${+inst[1]}개월` : /일시불/.test(clean) ? "일시불" : "",
     cancel: kind !== "승인",
   };
@@ -502,11 +505,6 @@ function prepareImport(items) {
   const used = new Set();
   const seenSms = [];
   const rows = items.map((it) => {
-    if (it.cancel) {
-      const target = state.tx.find((t) => !used.has(t.id) && sameCardTx(t, { ...it, time: "" }));
-      if (target) used.add(target.id);
-      return { ...it, status: target ? "cancel" : "cancel-miss", targetId: target?.id };
-    }
     const cand = { ...it, method: CARD_METHOD };
     // 같은 문자를 두 번 붙여넣은 경우
     if (it.source === "sms") {
@@ -517,16 +515,16 @@ function prepareImport(items) {
     }
     const match = state.tx.find((t) => !used.has(t.id) && sameCardTx(t, cand));
     if (match) { used.add(match.id); return { ...it, status: "dup" }; }
-    return { ...it, status: "new" };
+    return { ...it, status: it.amount < 0 ? "cancel" : "new" };
   });
   state.pendingImport = rows;
   const counts = { new: 0, dup: 0, cancel: 0 };
   rows.forEach((r) => { if (r.status === "new") counts.new++; else if (r.status === "dup") counts.dup++; else if (r.status === "cancel") counts.cancel++; });
 
-  const label = { new: "", dup: "이미 있음", cancel: "승인취소", "cancel-miss": "취소(원거래 없음)" };
+  const label = { new: "", dup: "이미 있음", cancel: "취소(차감)" };
   $("#import-preview").innerHTML = rows.length
     ? `<p><b>새 내역 ${counts.new}건</b> · 중복 ${counts.dup}건 · 취소 ${counts.cancel}건</p>
-       <table>${rows.map((r) => `<tr class="${r.status === "dup" ? "dup" : r.status.startsWith("cancel") ? "cancel" : ""}">
+       <table>${rows.map((r) => `<tr class="${r.status === "dup" ? "dup" : r.status === "cancel" ? "cancel" : ""}">
          <td>${r.date.slice(5)}${r.time ? " " + r.time : ""}</td><td>${escapeHtml(r.merchant)}</td><td class="num">${won(r.amount)}</td><td>${label[r.status]}</td></tr>`).join("")}</table>`
     : `<p>인식된 결제 내역이 없어요.</p>`;
   $("#import-confirm").disabled = !(counts.new || counts.cancel);
@@ -536,16 +534,14 @@ function commitImport() {
   const rows = state.pendingImport || [];
   let added = 0, removed = 0, lastDate = null;
   for (const r of rows) {
-    if (r.status === "new") {
+    if (r.status === "new" || r.status === "cancel") {
       state.tx.push(touch({
         id: uid(), date: r.date, time: r.time || "", amount: r.amount, merchant: r.merchant,
-        category: guessCategory(r.merchant), method: CARD_METHOD, memo: "",
-        installment: r.installment || "", source: r.source,
+        category: guessCategory(r.merchant), method: CARD_METHOD, memo: r.status === "cancel" ? "승인취소" : "",
+        installment: r.status === "cancel" ? "" : r.installment || "", source: r.source,
       }));
-      added++; lastDate = r.date;
-    } else if (r.status === "cancel") {
-      removeTx(r.targetId);
-      removed++; lastDate = r.date;
+      r.status === "cancel" ? removed++ : added++;
+      lastDate = r.date;
     }
   }
   saveTx();
@@ -555,7 +551,7 @@ function commitImport() {
   }
   $("#import-dialog").close();
   render();
-  toast(`${added}건 추가${removed ? `, ${removed}건 취소 반영` : ""}`);
+  toast(`${added}건 추가${removed ? `, 취소 ${removed}건 차감` : ""}`);
 }
 
 // ---------- CSV / 백업 ----------
