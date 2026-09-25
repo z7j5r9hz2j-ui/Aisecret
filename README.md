@@ -4,7 +4,7 @@ AI Agent for my daily routine.
 ## 나만의 가계부
 
 삼성카드 내역과 현금 지출을 달력으로 보고, 월말마다 CSV로 받는 개인 가계부입니다.
-서버 없이 브라우저에서만 동작하며, 데이터는 내 브라우저(localStorage)에만 저장됩니다.
+서버 없이 브라우저에서만 동작합니다. 데이터는 브라우저(localStorage)에 저장되고, 동기화를 켜면 나만 볼 수 있는 비공개 GitHub 저장소에도 저장됩니다.
 
 ### 실행
 
@@ -22,7 +22,8 @@ AI Agent for my daily routine.
 | 현금·기타 입력 | **+ 지출 입력** 또는 날짜를 두 번 누르기 |
 | 수정·삭제 | 아래 목록에서 내역 누르기 |
 | 월말 CSV | **이번 달 CSV 다운로드** (엑셀에서 한글 깨짐 없음). 월말 3일 전부터, 그리고 다음 달 10일까지 알림 배너가 뜹니다 |
-| 백업 | **전체 백업**(JSON) / **백업 복원**. 브라우저 데이터를 지우면 내역이 사라지니 가끔 백업하세요 |
+| PC·휴대폰 동기화 | **동기화 설정**에서 비공개 GitHub 저장소(`ledger-data`)와 토큰을 입력. 연결한 모든 기기가 같은 내역을 봅니다 |
+| 백업 | **전체 백업**(JSON) / **백업 복원** |
 
 - 같은 결제를 문자와 엑셀로 두 번 넣어도 중복은 자동으로 걸러집니다.
 - 가맹점 이름으로 카테고리(식비, 카페, 교통 등)를 자동 분류합니다.
@@ -31,3 +32,15 @@ AI Agent for my daily routine.
 
 삼성카드는 개인용 공개 API를 제공하지 않고, 마이데이터 API는 금융위원회 허가를 받은 사업자만 쓸 수 있습니다.
 그래서 카드사가 공식으로 제공하는 **엑셀 다운로드**와 **승인 문자**로 내역을 가져옵니다.
+
+### PC·휴대폰 동기화 설정 (처음 한 번)
+
+1. [비공개 저장소 만들기](https://github.com/new?name=ledger-data&visibility=private): 이름 `ledger-data`, **Private**
+2. [토큰 만들기](https://github.com/settings/personal-access-tokens/new) (Fine-grained)
+   - Repository access: **Only select repositories → ledger-data**
+   - Permissions → Repository permissions → **Contents: Read and write**
+3. 가계부의 **동기화 설정**에 `아이디/ledger-data`와 토큰을 입력 → **연결**. 휴대폰에서도 같은 토큰으로 연결
+
+- 내역을 바꾸면 바로, 앱을 열거나 다시 볼 때, 켜둔 동안 2분마다 동기화됩니다.
+- 인터넷이 끊겨도 기기에 저장해두었다가 연결되면 합칩니다. 두 기기에서 동시에 고쳐도 내역별로 최신 것이 남고, 삭제도 반영됩니다.
+- 토큰은 각 기기의 브라우저에만 저장됩니다. 기기를 잃어버리면 GitHub에서 토큰을 삭제하세요.

@@ -3,6 +3,7 @@
 // ---------- 기본 설정 ----------
 const STORAGE_KEY = "ledger.v1";
 const EXPORT_KEY = "ledger.exported.v1";
+const DELETED_KEY = "ledger.deleted.v1";
 const CARD_METHOD = "삼성카드";
 
 const CATEGORIES = [
@@ -35,9 +36,28 @@ function loadTx() {
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
+// 삭제한 내역 id와 시각: 다른 기기에 삭제를 전달하는 데 쓴다
+function loadDeleted() {
+  try { return JSON.parse(localStorage.getItem(DELETED_KEY) || "{}"); } catch { return {}; }
+}
+function persistLocal() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tx));
+    localStorage.setItem(DELETED_KEY, JSON.stringify(state.deleted));
+  } catch { toast("저장에 실패했어요. 브라우저 저장공간을 확인하세요."); }
+}
 function saveTx() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tx)); }
-  catch { toast("저장에 실패했어요. 브라우저 저장공간을 확인하세요."); }
+  persistLocal();
+  scheduleSync();
+}
+// 동기화 때 어느 쪽이 최신인지 가리기 위해 수정 시각을 남긴다
+function touch(t) {
+  t.updatedAt = Date.now();
+  return t;
+}
+function removeTx(id) {
+  state.tx = state.tx.filter((t) => t.id !== id);
+  state.deleted[id] = Date.now();
 }
 function loadExported() {
   try { return JSON.parse(localStorage.getItem(EXPORT_KEY) || "[]"); } catch { return []; }
@@ -48,6 +68,7 @@ function markExported(ym) {
     list.add(ym);
     localStorage.setItem(EXPORT_KEY, JSON.stringify([...list]));
   } catch { /* 무시 */ }
+  scheduleSync();
 }
 
 // ---------- 유틸 ----------
@@ -115,6 +136,7 @@ function toast(msg) {
 const today = new Date();
 const state = {
   tx: loadTx(),
+  deleted: loadDeleted(),
   year: today.getFullYear(),
   month: today.getMonth(),
   selected: ymd(today),
@@ -202,7 +224,7 @@ function renderDay() {
   $("#day-add").hidden = false;
   $("#day-list").innerHTML = list.length
     ? list.map((t) => `
-        <li data-id="${t.id}">
+        <li data-id="${escapeHtml(t.id)}">
           <span class="tx-badge ${isCard(t) ? "card" : "cash"}">${escapeHtml(t.method)}</span>
           <div class="tx-main">
             <div class="tx-merchant">${escapeHtml(t.merchant)}</div>
@@ -287,9 +309,9 @@ txForm.addEventListener("submit", (e) => {
   const id = txForm.id.value;
   if (id) {
     const t = state.tx.find((x) => x.id === id);
-    Object.assign(t, data);
+    touch(Object.assign(t, data));
   } else {
-    state.tx.push({ id: uid(), source: "manual", time: "", ...data });
+    state.tx.push(touch({ id: uid(), source: "manual", time: "", ...data }));
   }
   saveTx();
   state.selected = data.date;
@@ -303,7 +325,7 @@ txForm.addEventListener("submit", (e) => {
 $("#tx-delete").addEventListener("click", () => {
   const id = txForm.id.value;
   if (!id || !confirm("이 내역을 삭제할까요?")) return;
-  state.tx = state.tx.filter((t) => t.id !== id);
+  removeTx(id);
   saveTx();
   txDialog.close();
   render();
@@ -452,14 +474,14 @@ function commitImport() {
   let added = 0, removed = 0, lastDate = null;
   for (const r of rows) {
     if (r.status === "new") {
-      state.tx.push({
+      state.tx.push(touch({
         id: uid(), date: r.date, time: r.time || "", amount: r.amount, merchant: r.merchant,
         category: guessCategory(r.merchant), method: CARD_METHOD, memo: "",
         installment: r.installment || "", source: r.source,
-      });
+      }));
       added++; lastDate = r.date;
     } else if (r.status === "cancel") {
-      state.tx = state.tx.filter((t) => t.id !== r.targetId);
+      removeTx(r.targetId);
       removed++; lastDate = r.date;
     }
   }
@@ -521,7 +543,13 @@ async function restore(file) {
     const list = Array.isArray(data) ? data : data.tx;
     if (!Array.isArray(list)) throw new Error();
     if (!confirm(`백업의 ${list.length}건으로 현재 내역을 바꿀까요?`)) return;
-    state.tx = list;
+    // 백업에 없는 내역은 삭제로 기록해야 다른 기기에서도 사라진다
+    const keep = new Set(list.map((t) => t.id));
+    for (const t of state.tx) if (!keep.has(t.id)) removeTx(t.id);
+    state.tx = list.map((t) => {
+      delete state.deleted[t.id];
+      return touch({ ...t });
+    });
     saveTx();
     render();
     toast("복원했어요");
