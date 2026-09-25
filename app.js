@@ -402,32 +402,61 @@ function parseSheet(rows) {
 // ---------- 승인 문자 분석 ----------
 function parseSms(text) {
   const out = [];
-  const re = /삼성\s*(?:카드)?\s*\(?\d{0,4}\)?\s*(승인취소|취소|승인)/g;
+  // 문자 하나의 시작: "[삼성카드]4708 ..." 또는 "삼성1234승인"
+  const re = /\[삼성카드\]\s*\(?\d{0,4}\)?\s*(승인취소|취소|승인)?|삼성\s*(?:카드)?\s*\(?\d{0,4}\)?\s*(승인취소|취소|승인)/g;
   const marks = [...text.matchAll(re)];
   marks.forEach((m, i) => {
     const chunk = text.slice(m.index, i + 1 < marks.length ? marks[i + 1].index : undefined);
     // 누적 금액은 무시: "누적" 부터 그 줄 끝까지 지운다 (누적금액, 누적: 등 표기 포함)
     const clean = chunk.replace(/누적[^\n]*/g, "");
-    const amt = clean.match(/(-?[\d,]+)\s*원/);
-    const dt = clean.match(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
-    if (!amt || !dt) return;
-    let merchant = clean.slice(dt.index + dt[0].length).split("\n")[0].trim();
-    if (!merchant) {
-      const lines = clean.slice(dt.index + dt[0].length).split("\n").map((l) => l.trim()).filter(Boolean);
-      merchant = lines[0] || "삼성카드 결제";
-    }
-    const inst = clean.match(/(\d{1,2})\s*개월/);
-    out.push({
-      date: guessYear(+dt[1], +dt[2]),
-      time: `${pad(dt[3])}:${dt[4]}`,
-      merchant: cleanMerchant(merchant) || "삼성카드 결제",
-      amount: Math.abs(parseAmount(amt[1])),
-      installment: inst ? `${+inst[1]}개월` : /일시불/.test(clean) ? "일시불" : "",
-      cancel: m[1] !== "승인",
-      source: "sms",
-    });
+    const kind = m[1] || m[2];
+    const tx = kind ? parseApproval(clean, kind) : /후불교통/.test(clean) ? parseTransit(clean) : null;
+    if (tx) out.push({ ...tx, source: "sms" });
   });
   return out;
+}
+
+// 승인/승인취소 문자
+function parseApproval(clean, kind) {
+  const amt = clean.match(/(-?[\d,]+)\s*원/);
+  const dt = clean.match(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
+  if (!amt || !dt) return null;
+  let merchant = clean.slice(dt.index + dt[0].length).split("\n")[0].trim();
+  if (!merchant) {
+    const lines = clean.slice(dt.index + dt[0].length).split("\n").map((l) => l.trim()).filter(Boolean);
+    merchant = lines[0] || "삼성카드 결제";
+  }
+  const inst = clean.match(/(\d{1,2})\s*개월/);
+  return {
+    date: guessYear(+dt[1], +dt[2]),
+    time: `${pad(dt[3])}:${dt[4]}`,
+    merchant: cleanMerchant(merchant) || "삼성카드 결제",
+    amount: Math.abs(parseAmount(amt[1])),
+    installment: inst ? `${+inst[1]}개월` : /일시불/.test(clean) ? "일시불" : "",
+    cancel: kind !== "승인",
+  };
+}
+
+// 후불교통 월 합계 문자: "09월접수 후불교통 (버스+지하철+통행료) 합계 19,750원"
+// 날짜가 없으므로 접수한 달의 마지막 날로 기록한다 (언제 붙여넣어도 같은 날짜라 중복이 걸러짐)
+function parseTransit(clean) {
+  const amt = clean.match(/합계\s*([\d,]+)\s*원/) || clean.match(/([\d,]+)\s*원/);
+  const mon = clean.match(/(\d{1,2})\s*월\s*접수/) || clean.match(/(\d{1,2})\s*월/);
+  if (!amt || !mon) return null;
+  const month = +mon[1];
+  const now = new Date();
+  // 12월 접수분을 1월에 붙여넣는 경우처럼 올해보다 뒤의 달이면 작년
+  const year = month > now.getMonth() + 1 ? now.getFullYear() - 1 : now.getFullYear();
+  const lastDay = new Date(year, month, 0).getDate();
+  const detail = clean.match(/\(([^)]*)\)/);
+  return {
+    date: `${year}-${pad(month)}-${pad(lastDay)}`,
+    time: "",
+    merchant: `후불교통${detail ? `(${detail[1].trim()})` : ""}`,
+    amount: parseAmount(amt[1]),
+    installment: "",
+    cancel: false,
+  };
 }
 
 // ---------- 중복 확인 & 가져오기 ----------
@@ -449,11 +478,13 @@ function prepareImport(items) {
       return { ...it, status: target ? "cancel" : "cancel-miss", targetId: target?.id };
     }
     const cand = { ...it, method: CARD_METHOD };
+    // 같은 문자를 두 번 붙여넣은 경우
+    if (it.source === "sms") {
+      if (seenSms.some((t) => sameCardTx(t, cand) && t.time === cand.time)) return { ...it, status: "dup" };
+      seenSms.push(cand);
+    }
     const match = state.tx.find((t) => !used.has(t.id) && sameCardTx(t, cand));
     if (match) { used.add(match.id); return { ...it, status: "dup" }; }
-    // 같은 문자를 두 번 붙여넣은 경우
-    if (it.source === "sms" && seenSms.some((t) => sameCardTx(t, cand) && t.time === cand.time)) return { ...it, status: "dup" };
-    if (it.source === "sms") seenSms.push(cand);
     return { ...it, status: "new" };
   });
   state.pendingImport = rows;
