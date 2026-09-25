@@ -16,7 +16,7 @@ const CATEGORY_RULES = [
   ["카페·간식", /스타벅스|커피|카페|투썸|이디야|메가|빽다방|컴포즈|폴바셋|베이커리|파리바게|뚜레쥬르|배스킨|던킨|디저트/],
   ["생활·마트", /이마트|홈플러스|롯데마트|코스트코|트레이더스|마트|다이소|GS25|지에스25|CU|씨유|세븐일레븐|이마트24|편의점|올리브영/i],
   ["식비", /식당|김밥|치킨|피자|버거|맥도날드|롯데리아|KFC|서브웨이|배달의민족|배민|우아한형제들|요기요|위대한상상|쿠팡이츠|국밥|분식|한식|중식|일식|고기|초밥|반점/i],
-  ["교통", /택시|카카오T|카카오모빌리티|티머니|버스|지하철|코레일|KTX|SRT|주유|오일|에너지|GS칼텍스|SK에너지|S-OIL|주차|하이패스|고속도로/i],
+  ["교통", /택시|카카오T|카카오모빌리티|티머니|버스|지하철|코레일|철도|KTX|SRT|에스알|주유|오일|에너지|GS칼텍스|SK에너지|S-OIL|주차|하이패스|고속도로/i],
   ["쇼핑", /쿠팡|11번가|G마켓|지마켓|옥션|네이버페이|무신사|SSG|신세계|현대백화점|롯데백화점|아울렛|29CM|에이블리|지그재그/i],
   ["주거·통신", /SKT|KT|LG유플러스|유플러스|통신|관리비|전기|가스|수도|인터넷/i],
   ["의료·건강", /병원|의원|약국|치과|한의원|안과|피부과|헬스|필라테스|요가/],
@@ -407,6 +407,8 @@ function parseSms(text) {
   const marks = [...text.matchAll(re)];
   marks.forEach((m, i) => {
     const chunk = text.slice(m.index, i + 1 < marks.length ? marks[i + 1].index : undefined);
+    // 누적 금액은 기록하지 않고, 같은 시각의 결제 두 건을 구분하는 데만 쓴다
+    const cum = chunk.match(/누적[^\d\n]*([\d,]+)/)?.[1] || "";
     // 누적 금액은 무시: "누적" 부터 그 줄 끝까지 지운다 (누적금액, 누적: 등 표기 포함)
     const clean = chunk.replace(/누적[^\n]*/g, "");
     const kind = m[1] || m[2];
@@ -414,7 +416,7 @@ function parseSms(text) {
       : /후불교통/.test(clean) ? parseTransit(clean)
       : /자동결제|정기결제|자동납부/.test(clean) ? parseAutoPay(clean.slice(m[0].length))
       : null; // 결제예정금액 안내 같은 다른 문자는 지출이 아니므로 무시
-    if (tx) out.push({ ...tx, source: "sms" });
+    if (tx) out.push({ ...tx, cum, source: "sms" });
   });
   return out;
 }
@@ -488,6 +490,8 @@ function parseTransit(clean) {
 // ---------- 중복 확인 & 가져오기 ----------
 function sameCardTx(a, b) {
   if (!isCard(a) || a.date !== b.date || a.amount !== b.amount) return false;
+  // 결제 시간이 둘 다 있고 다르면 다른 결제
+  if (a.time && b.time && a.time !== b.time) return false;
   const x = normName(a.merchant), y = normName(b.merchant);
   // 문자와 엑셀의 가맹점명이 조금 다를 수 있어 앞부분만 비교
   return !x || !y || x.startsWith(y.slice(0, 4)) || y.startsWith(x.slice(0, 4)) || (a.time && b.time && a.time === b.time);
@@ -506,7 +510,9 @@ function prepareImport(items) {
     const cand = { ...it, method: CARD_METHOD };
     // 같은 문자를 두 번 붙여넣은 경우
     if (it.source === "sms") {
-      if (seenSms.some((t) => sameCardTx(t, cand) && t.time === cand.time)) return { ...it, status: "dup" };
+      // 시간까지 같아도 누적 금액이 다르면 같은 분에 결제한 다른 건
+      const again = seenSms.some((t) => sameCardTx(t, cand) && t.time === cand.time && (!t.cum || !cand.cum || t.cum === cand.cum));
+      if (again) return { ...it, status: "dup" };
       seenSms.push(cand);
     }
     const match = state.tx.find((t) => !used.has(t.id) && sameCardTx(t, cand));
@@ -521,7 +527,7 @@ function prepareImport(items) {
   $("#import-preview").innerHTML = rows.length
     ? `<p><b>새 내역 ${counts.new}건</b> · 중복 ${counts.dup}건 · 취소 ${counts.cancel}건</p>
        <table>${rows.map((r) => `<tr class="${r.status === "dup" ? "dup" : r.status.startsWith("cancel") ? "cancel" : ""}">
-         <td>${r.date.slice(5)}</td><td>${escapeHtml(r.merchant)}</td><td class="num">${won(r.amount)}</td><td>${label[r.status]}</td></tr>`).join("")}</table>`
+         <td>${r.date.slice(5)}${r.time ? " " + r.time : ""}</td><td>${escapeHtml(r.merchant)}</td><td class="num">${won(r.amount)}</td><td>${label[r.status]}</td></tr>`).join("")}</table>`
     : `<p>인식된 결제 내역이 없어요.</p>`;
   $("#import-confirm").disabled = !(counts.new || counts.cancel);
 }
@@ -670,6 +676,13 @@ $("#import-file").onchange = async (e) => {
   catch (err) { $("#import-preview").innerHTML = `<p class="cancel">${escapeHtml(err.message)}</p>`; }
 };
 $("#sms-parse").onclick = () => prepareImport(parseSms($("#sms-text").value));
+$("#sms-reset").onclick = () => {
+  $("#sms-text").value = "";
+  $("#import-preview").innerHTML = "";
+  $("#import-confirm").disabled = true;
+  state.pendingImport = null;
+  $("#sms-text").focus();
+};
 $("#import-confirm").onclick = commitImport;
 
 render();

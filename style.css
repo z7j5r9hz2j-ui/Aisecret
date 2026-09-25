@@ -180,3 +180,4 @@ dialog input, dialog select, dialog textarea {
 .sync-status { font-size: 13px; margin: 0; color: var(--muted); }
 .sync-status.error { color: var(--danger); }
 .sync-status:empty { display: none; }
+.sms-actions { display: flex; gap: 8px; }
