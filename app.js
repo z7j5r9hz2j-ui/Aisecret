@@ -384,7 +384,8 @@ function parseSms(text) {
   const marks = [...text.matchAll(re)];
   marks.forEach((m, i) => {
     const chunk = text.slice(m.index, i + 1 < marks.length ? marks[i + 1].index : undefined);
-    const clean = chunk.replace(/누적\s*-?[\d,]+\s*원?/g, "");
+    // 누적 금액은 무시: "누적" 부터 그 줄 끝까지 지운다 (누적금액, 누적: 등 표기 포함)
+    const clean = chunk.replace(/누적[^\n]*/g, "");
     const amt = clean.match(/(-?[\d,]+)\s*원/);
     const dt = clean.match(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
     if (!amt || !dt) return;
