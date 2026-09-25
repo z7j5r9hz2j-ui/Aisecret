@@ -1,0 +1,25 @@
+# main 브랜치가 바뀔 때마다 gh-pages 브랜치를 main과 똑같이 맞춰서
+# GitHub Pages(https://z7j5r9hz2j-ui.github.io/Aisecret/)에 자동 반영한다.
+name: Sync gh-pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-gh-pages
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push main to gh-pages
+        run: git push --force origin HEAD:refs/heads/gh-pages
