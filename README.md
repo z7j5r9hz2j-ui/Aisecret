@@ -11,6 +11,7 @@ AI Agent for my daily routine.
 - `index.html`을 브라우저로 열면 바로 사용할 수 있습니다.
 - 웹 주소: https://z7j5r9hz2j-ui.github.io/Aisecret/ (휴대폰에서 "홈 화면에 추가"하면 앱처럼 쓸 수 있어요)
 - `main`에 변경이 머지되면 GitHub Actions(`.github/workflows/sync-gh-pages.yml`)가 `gh-pages` 브랜치를 자동으로 맞춰 사이트에 반영합니다.
+- 앱은 열 때와 다시 볼 때 `version.json`으로 새 버전을 확인해서, 새 버전이 있으면 자동으로 새 화면을 불러옵니다 (입력 창이 열려 있을 때는 제외).
 
 ### 기능
 
