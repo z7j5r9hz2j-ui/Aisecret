@@ -1,0 +1,15 @@
+{
+  "name": "veebar-ppt-template",
+  "private": true,
+  "description": "Veebar Tech branded PowerPoint template generator",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-icons": "^5.7.0",
+    "sharp": "^0.33.5"
+  }
+}
