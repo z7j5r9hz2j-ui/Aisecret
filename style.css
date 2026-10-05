@@ -202,7 +202,7 @@ dialog input, dialog select, dialog textarea {
 .chart-legend li { display: inline-flex; align-items: center; gap: 5px; }
 .legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .chart { position: relative; width: 100%; }
-.chart svg { display: block; overflow: visible; }
+.chart svg { display: block; overflow: visible; width: 100%; height: auto; }
 .chart-grid { stroke: var(--grid); stroke-width: 1; }
 .chart-base { stroke: var(--axis); stroke-width: 1; }
 .chart-tick { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
