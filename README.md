@@ -1,7 +1,7 @@
 # Aisecret
 AI Agent for my daily routine.
 
-## 나만의 가계부
+## NK's Expense Tracker (가계부)
 
 삼성카드 내역과 현금 지출을 달력으로 보고, 월말마다 CSV로 받는 개인 가계부입니다.
 서버 없이 브라우저에서만 동작합니다. 데이터는 브라우저(localStorage)에 저장되고, 동기화를 켜면 나만 볼 수 있는 비공개 GitHub 저장소에도 저장됩니다.
