@@ -45,6 +45,24 @@
       <div id="calendar" class="calendar"></div>
     </section>
 
+    <section class="panel chart-panel">
+      <div class="panel-head">
+        <h3>월별 지출</h3>
+        <div class="seg" role="group" aria-label="나눠 보기">
+          <button type="button" class="seg-btn" data-mode="method">결제수단</button>
+          <button type="button" class="seg-btn" data-mode="category">카테고리</button>
+        </div>
+      </div>
+      <p id="chart-note" class="chart-note"></p>
+      <ul id="chart-legend" class="chart-legend"></ul>
+      <div id="chart" class="chart"></div>
+      <div class="chart-foot">
+        <span class="chart-hint">막대를 누르면 그 달로 이동해요</span>
+        <button type="button" id="chart-table-toggle" class="btn small">표로 보기</button>
+      </div>
+      <div id="chart-table" class="chart-table" hidden></div>
+    </section>
+
     <section class="bottom">
       <div class="panel">
         <div class="panel-head">
@@ -154,6 +172,7 @@
 
   <script src="app.js?v=dev"></script>
   <script src="sync.js?v=dev"></script>
+  <script src="chart.js?v=dev"></script>
   <script src="update.js?v=dev"></script>
 </body>
 </html>

@@ -73,6 +73,7 @@ function markExported(ym) {
 
 // ---------- 유틸 ----------
 const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const ymOf = (y, m) => `${y}-${pad(m + 1)}`;
@@ -154,6 +155,7 @@ function render() {
   renderSummary();
   renderDay();
   renderBanner();
+  if (typeof renderChart === "function") renderChart();
 }
 
 function renderCalendar() {

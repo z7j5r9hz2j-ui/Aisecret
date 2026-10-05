@@ -6,8 +6,12 @@
   --muted: #6b7280;
   --primary: #1f5fd6;
   --primary-text: #ffffff;
-  --card: #1f5fd6;
-  --cash: #e0822b;
+  --card: #2a78d6;
+  --cash: #eb6834;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
   --danger: #d33a3a;
   --ok: #1f8a4c;
   --sun: #d33a3a;
@@ -25,8 +29,12 @@
     --muted: #9aa1ab;
     --primary: #5b8cff;
     --primary-text: #0b0d10;
-    --card: #5b8cff;
-    --cash: #f0a050;
+    --card: #3987e5;
+    --cash: #d95926;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9;
+    --grid: #2c2c2a;
+    --axis: #383835;
     --danger: #ff6b6b;
     --ok: #4cc47f;
     --sun: #ff7a7a;
@@ -182,3 +190,46 @@ dialog input, dialog select, dialog textarea {
 .sync-status:empty { display: none; }
 .sms-actions { display: flex; gap: 8px; }
 .tx-amount.neg { color: var(--ok); }
+
+/* ---------- 월별 지출 그래프 ---------- */
+.chart-panel { margin-top: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg-btn { border: none; background: var(--surface); color: var(--muted); padding: 5px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+.seg-btn.active { background: var(--selected); color: var(--text); font-weight: 600; }
+.chart-note { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.chart-legend { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; overflow: visible; }
+.chart-grid { stroke: var(--grid); stroke-width: 1; }
+.chart-base { stroke: var(--axis); stroke-width: 1; }
+.chart-tick { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.chart-month { font-size: 11px; fill: var(--muted); }
+.chart-month.selected { fill: var(--text); font-weight: 700; }
+.chart-value { font-size: 12px; font-weight: 700; fill: var(--text); }
+.chart-hit { fill: transparent; cursor: pointer; outline: none; }
+.chart-hit:focus-visible { stroke: var(--primary); stroke-width: 2; }
+.chart-col path { transition: opacity 0.12s; }
+svg.hovering .chart-col:not(.active) path { opacity: 0.5; }
+.chart-empty { margin: 0; padding: 40px 0; text-align: center; color: var(--muted); font-size: 14px; }
+.chart-tip {
+  position: absolute; top: 0; z-index: 2; pointer-events: none; min-width: 140px; max-width: 260px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); font-size: 12px;
+}
+.tip-title { font-weight: 700; margin-bottom: 4px; }
+.tip-row { display: flex; align-items: center; gap: 6px; line-height: 1.6; white-space: nowrap; }
+.tip-row strong { font-variant-numeric: tabular-nums; }
+.tip-key { width: 10px; height: 2px; border-radius: 1px; display: inline-block; }
+.tip-name { color: var(--muted); }
+.tip-total { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); font-weight: 600; }
+.tip-sub { margin-top: 4px; color: var(--muted); }
+.chart-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.chart-hint { font-size: 12px; color: var(--muted); }
+.chart-table { margin-top: 8px; overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th, .data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.data-table th:first-child, .data-table td:first-child { text-align: left; }
+.data-table th { color: var(--muted); font-weight: 600; }
