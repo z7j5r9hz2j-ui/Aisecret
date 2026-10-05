@@ -5,7 +5,7 @@
 const CHART_MONTHS = 12;
 const CHART_MODE_KEY = "ledger.chartMode.v1";
 // 카테고리 색은 순위가 아니라 카테고리에 고정 (달을 옮겨도 색이 바뀌지 않게)
-const CHART_CATS = ["식비", "카페·간식", "교통", "쇼핑", "생활·마트", "주거·통신"];
+const CHART_CATS = ["식비", "카페·간식", "교통", "쇼핑", "생활·마트", "주거·통신", "보험"];
 const CHART_OTHER = "그 외";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
