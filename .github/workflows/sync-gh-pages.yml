@@ -28,6 +28,10 @@ jobs:
           # 앱이 새 버전이 나왔는지 확인하는 파일 (update.js)
           echo "{\"version\":\"${GITHUB_SHA::7}\"}" > version.json
           git add version.json
+          # 아내용 가계부(HJ): 같은 화면을 …/hj/ 주소로. <base>로 파일은 위 폴더 것을 쓴다
+          mkdir -p hj
+          sed 's#<head>#<head>\n  <base href="../" />#' index.html > hj/index.html
+          git add hj/index.html
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           git commit -am "Deploy ${GITHUB_SHA::7}" --allow-empty

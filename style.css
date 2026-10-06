@@ -233,3 +233,6 @@ svg.hovering .chart-col:not(.active) path { opacity: 0.5; }
 .data-table th, .data-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .data-table th:first-child, .data-table td:first-child { text-align: left; }
 .data-table th { color: var(--muted); font-weight: 600; }
+.inline-field { display: flex; flex-direction: row !important; align-items: center; gap: 8px; margin: 0 0 8px; }
+.inline-field select, .inline-field input { width: auto !important; }
+.preview select { font: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
