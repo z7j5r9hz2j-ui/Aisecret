@@ -13,6 +13,15 @@ AI Agent for my daily routine.
 - `main`에 변경이 머지되면 GitHub Actions(`.github/workflows/sync-gh-pages.yml`)가 `gh-pages` 브랜치를 자동으로 맞춰 사이트에 반영합니다.
 - 앱은 열 때와 다시 볼 때 `version.json`으로 새 버전을 확인해서, 새 버전이 있으면 자동으로 새 화면을 불러옵니다 (입력 창이 열려 있을 때는 제외).
 
+### HJ's Expense Tracker (아내용)
+
+- 주소: https://z7j5r9hz2j-ui.github.io/Aisecret/hj/
+- 같은 코드로 동작하고, 사용자별 설정은 `profile.js`에 있습니다 (주소가 `/hj/`이면 HJ).
+- 내역·동기화는 NK와 완전히 분리됩니다 (브라우저 저장 키 `hj.ledger.*`, 동기화 저장소 `hj-ledger-data`).
+- 현대카드·국민카드 알림 인식 (`parse-hj.js`). 날짜 없는 알림은 붙여넣기 창에서 고른 날짜로 기록하고, 앞뒤 3일 안의 같은 결제는 중복으로 봅니다.
+- **정기구독** 카테고리 (넷플릭스, 유튜브, 티빙, 웨이브, 왓챠, 디즈니+, 쿠팡플레이, 멜론 등 자동 분류).
+- `hj/index.html`은 배포할 때 워크플로가 `index.html`로 만들어 올립니다.
+
 ### 기능
 
 | 기능 | 사용법 |

@@ -3,9 +3,9 @@
 // ---------- PC·휴대폰 동기화 (비공개 GitHub 저장소의 ledger.json) ----------
 // 각 기기는 자기 브라우저에 저장하고, 바뀔 때마다 저장소의 파일과 합친다.
 // 내역마다 updatedAt(수정 시각)을, 삭제는 state.deleted에 시각을 남겨 최신 쪽을 고른다.
-const SYNC_KEY = "ledger.sync.v1";
+const SYNC_KEY = `${PROFILE.keyPrefix}.sync.v1`;
 const SYNC_FILE = "ledger.json";
-const SYNC_DEFAULT_REPO = "z7j5r9hz2j-ui/ledger-data";
+const SYNC_DEFAULT_REPO = `z7j5r9hz2j-ui/${PROFILE.syncRepoName}`;
 
 const sync = {
   cfg: loadSyncCfg(),

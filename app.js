@@ -1,18 +1,16 @@
 "use strict";
 
-// ---------- 기본 설정 ----------
-const STORAGE_KEY = "ledger.v1";
-const EXPORT_KEY = "ledger.exported.v1";
-const DELETED_KEY = "ledger.deleted.v1";
-const CARD_METHOD = "삼성카드";
+// ---------- 기본 설정 (사용자별 값은 profile.js) ----------
+const STORAGE_KEY = `${PROFILE.keyPrefix}.v1`;
+const EXPORT_KEY = `${PROFILE.keyPrefix}.exported.v1`;
+const DELETED_KEY = `${PROFILE.keyPrefix}.deleted.v1`;
+// 카드 문자에서 카드를 알 수 없을 때 쓰는 기본 카드
+const CARD_METHOD = PROFILE.cards[0];
+const CATEGORIES = PROFILE.categories;
 
-const CATEGORIES = [
-  "식비", "카페·간식", "교통", "쇼핑", "생활·마트", "주거·통신",
-  "보험", "의료·건강", "문화·여가", "교육", "경조사·선물", "기타",
-];
-
-// 가맹점 이름으로 카테고리 자동 분류
+// 가맹점 이름으로 카테고리 자동 분류 (사용자별 규칙이 먼저)
 const CATEGORY_RULES = [
+  ...PROFILE.extraRules,
   // 보험사 자동결제 (삼성생명, 삼성화재, 현대해상, DB손해보험, 라이나생명 등)
   ["보험", /보험|생명|화재|해상|손해|손보|라이나|AIA|메트라이프|처브|캐롯/i],
   ["카페·간식", /스타벅스|커피|카페|투썸|이디야|메가|빽다방|컴포즈|폴바셋|베이커리|파리바게|뚜레쥬르|배스킨|던킨|디저트/],
@@ -86,9 +84,9 @@ const shortWon = (n) => {
   return Math.round(n).toLocaleString("ko-KR");
 };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const isCard = (t) => t.method === CARD_METHOD;
+const isCard = (t) => PROFILE.cards.includes(t.method);
 // 카드 내역의 "㈜우아한형제들" 같은 법인 표기 제거
-const cleanMerchant = (s) => String(s || "").replace(/㈜|\(주\)|주식회사/g, "").trim().replace(/_+$/, "");
+const cleanMerchant = (s) => String(s || "").replace(/㈜|\(주\)|주식회사/g, "").trim().replace(/_\d*$/, "");
 const normName = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -257,7 +255,7 @@ function renderBanner() {
     target = now;
     text = `월말이에요! ${now.getMonth() + 1}월 내역을 확인하고 CSV로 받아두세요.`;
   }
-  if (target && sessionStorageGet("bannerClosed") !== text) {
+  if (target && sessionStorageGet(`${PROFILE.keyPrefix}.bannerClosed`) !== text) {
     $("#export-banner-text").textContent = text;
     $("#export-banner").hidden = false;
     $("#export-banner-btn").onclick = () => exportCsv(target.getFullYear(), target.getMonth());
@@ -268,10 +266,28 @@ function renderBanner() {
 function sessionStorageGet(k) { try { return sessionStorage.getItem(k); } catch { return null; } }
 function sessionStorageSet(k, v) { try { sessionStorage.setItem(k, v); } catch { /* 무시 */ } }
 
+// ---------- 사용자별 화면 문구 ----------
+(function applyProfile() {
+  document.title = PROFILE.title;
+  $("h1").textContent = PROFILE.title;
+  $("#btn-import").textContent = PROFILE.importLabel;
+  $("#import-title").textContent = PROFILE.importTitle;
+  $("#excel-hint").innerHTML = PROFILE.excelHint;
+  $("#sms-hint").textContent = PROFILE.smsHint;
+  $("#sms-text").placeholder = PROFILE.smsPlaceholder;
+  $("#sum-card-label").textContent = PROFILE.cardLabel;
+  $("#import-card").innerHTML = PROFILE.cards.map((c) => `<option>${escapeHtml(c)}</option>`).join("");
+  $("#import-card-row").hidden = PROFILE.cards.length < 2;
+  $("#sms-date-row").hidden = PROFILE.id !== "hj";
+  $("#sync-new-repo").href = `https://github.com/new?name=${PROFILE.syncRepoName}&visibility=private`;
+  $$(".sync-repo-name").forEach((el) => (el.textContent = PROFILE.syncRepoName));
+})();
+
 // ---------- 입력 / 수정 ----------
 const txDialog = $("#tx-dialog");
 const txForm = $("#tx-form");
 txForm.category.innerHTML = CATEGORIES.map((c) => `<option>${c}</option>`).join("");
+txForm.method.innerHTML = PROFILE.methods.map((c) => `<option>${c}</option>`).join("");
 
 function openTxDialog(tx, date) {
   txForm.reset();
@@ -362,7 +378,7 @@ function findColumns(rows) {
     const cells = rows[i].map((c) => String(c).replace(/\s/g, ""));
     const idx = (re) => cells.findIndex((c) => re.test(c));
     const date = idx(/이용일|승인일|거래일|사용일|매출일/);
-    const merchant = idx(/가맹점|이용처|사용처|상호/);
+    const merchant = idx(/가맹점|이용처|사용처|상호|이용하신곳|거래처/);
     let amount = idx(/이용금액|승인금액|사용금액|매출금액|결제금액|거래금액/);
     if (amount < 0) amount = idx(/금액/);
     if (date >= 0 && amount >= 0) {
@@ -379,7 +395,7 @@ function findColumns(rows) {
 
 function parseSheet(rows) {
   const col = findColumns(rows);
-  if (!col) throw new Error("이용일/금액 열을 찾지 못했어요. 삼성카드 이용내역 파일이 맞는지 확인하세요.");
+  if (!col) throw new Error("이용일/금액 열을 찾지 못했어요. 카드사 이용내역 파일이 맞는지 확인하세요.");
   const out = [];
   for (const r of rows.slice(col.header + 1)) {
     const rawDate = r[col.date];
@@ -496,7 +512,7 @@ function parseTransit(clean) {
 
 // ---------- 중복 확인 & 가져오기 ----------
 function sameCardTx(a, b) {
-  if (!isCard(a) || a.date !== b.date || a.amount !== b.amount) return false;
+  if (!isCard(a) || a.method !== (b.method || CARD_METHOD) || a.date !== b.date || a.amount !== b.amount) return false;
   // 결제 시간이 둘 다 있고 다르면 다른 결제
   if (a.time && b.time && a.time !== b.time) return false;
   const x = normName(a.merchant), y = normName(b.merchant);
@@ -504,12 +520,21 @@ function sameCardTx(a, b) {
   return !x || !y || x.startsWith(y.slice(0, 4)) || y.startsWith(x.slice(0, 4)) || (a.time && b.time && a.time === b.time);
 }
 
+// 날짜가 없는 알림(국민카드 전표매입 등)은 실제 결제보다 하루이틀 늦게 오므로 앞뒤 3일 안의 같은 결제도 중복으로 본다
+function nearCardTx(a, b) {
+  if (!isCard(a) || a.method !== b.method || a.amount !== b.amount) return false;
+  const days = Math.abs(new Date(a.date) - new Date(b.date)) / 86400000;
+  const x = normName(a.merchant), y = normName(b.merchant);
+  return days <= 3 && (x.startsWith(y.slice(0, 4)) || y.startsWith(x.slice(0, 4)));
+}
+
 function prepareImport(items) {
+  state.importItems = items;
   // 기존 내역 하나는 새 내역 하나에만 대응시킨다 (같은 날 같은 커피 2잔도 구분)
   const used = new Set();
   const seenSms = [];
   const rows = items.map((it) => {
-    const cand = { ...it, method: CARD_METHOD };
+    const cand = { ...it, method: it.method || CARD_METHOD };
     // 같은 문자를 두 번 붙여넣은 경우
     if (it.source === "sms") {
       // 시간까지 같아도 누적 금액이 다르면 같은 분에 결제한 다른 건
@@ -517,7 +542,7 @@ function prepareImport(items) {
       if (again) return { ...it, status: "dup" };
       seenSms.push(cand);
     }
-    const match = state.tx.find((t) => !used.has(t.id) && sameCardTx(t, cand));
+    const match = state.tx.find((t) => !used.has(t.id) && (sameCardTx(t, cand) || (it.noDate && nearCardTx(t, cand))));
     if (match) { used.add(match.id); return { ...it, status: "dup" }; }
     return { ...it, status: it.amount < 0 ? "cancel" : "new" };
   });
@@ -528,11 +553,24 @@ function prepareImport(items) {
   const label = { new: "", dup: "이미 있음", cancel: "취소(차감)" };
   $("#import-preview").innerHTML = rows.length
     ? `<p><b>새 내역 ${counts.new}건</b> · 중복 ${counts.dup}건 · 취소 ${counts.cancel}건</p>
-       <table>${rows.map((r) => `<tr class="${r.status === "dup" ? "dup" : r.status === "cancel" ? "cancel" : ""}">
-         <td>${r.date.slice(5)}${r.time ? " " + r.time : ""}</td><td>${escapeHtml(r.merchant)}</td><td class="num">${won(r.amount)}</td><td>${label[r.status]}</td></tr>`).join("")}</table>`
+       <table>${rows.map((r, i) => `<tr class="${r.status === "dup" ? "dup" : r.status === "cancel" ? "cancel" : ""}">
+         <td>${r.date.slice(5)}${r.time ? " " + r.time : ""}</td><td>${escapeHtml(r.merchant)}</td><td class="num">${won(r.amount)}</td>${cardCell(r, i)}<td>${label[r.status]}</td></tr>`).join("")}</table>`
     : `<p>인식된 결제 내역이 없어요.</p>`;
   $("#import-confirm").disabled = !(counts.new || counts.cancel);
 }
+
+function cardCell(r, i) {
+  if (PROFILE.cards.length < 2) return "";
+  const cur = r.method || CARD_METHOD;
+  return `<td><select class="row-card" data-i="${i}" aria-label="카드">${PROFILE.cards.map((c) => `<option${c === cur ? " selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select></td>`;
+}
+// 미리보기에서 카드를 바꾸면 중복 여부를 다시 계산
+$("#import-preview").addEventListener("change", (e) => {
+  const sel = e.target.closest(".row-card");
+  if (!sel || !state.importItems) return;
+  state.importItems[+sel.dataset.i].method = sel.value;
+  prepareImport(state.importItems);
+});
 
 function commitImport() {
   const rows = state.pendingImport || [];
@@ -541,7 +579,7 @@ function commitImport() {
     if (r.status === "new" || r.status === "cancel") {
       state.tx.push(touch({
         id: uid(), date: r.date, time: r.time || "", amount: r.amount, merchant: r.merchant,
-        category: guessCategory(r.merchant), method: CARD_METHOD, memo: r.status === "cancel" ? "승인취소" : "",
+        category: guessCategory(r.merchant), method: r.method || CARD_METHOD, memo: r.status === "cancel" ? "승인취소" : "",
         installment: r.status === "cancel" ? "" : r.installment || "", source: r.source,
       }));
       r.status === "cancel" ? removed++ : added++;
@@ -586,18 +624,20 @@ function exportCsv(y = state.year, m = state.month) {
   const card = list.filter(isCard).reduce((s, t) => s + t.amount, 0);
   const total = list.reduce((s, t) => s + t.amount, 0);
   lines.push("");
-  lines.push(["", "", "삼성카드 합계", "", "", "", card, ""].join(","));
+  for (const c of PROFILE.cards) {
+    lines.push(["", "", `${c} 합계`, "", "", "", list.filter((t) => t.method === c).reduce((s, t) => s + t.amount, 0), ""].join(","));
+  }
   lines.push(["", "", "현금·기타 합계", "", "", "", total - card, ""].join(","));
   lines.push(["", "", "총 합계", "", "", "", total, ""].join(","));
   // BOM을 붙여야 엑셀에서 한글이 깨지지 않는다
-  download(`ledger_${ymOf(y, m)}.csv`, "\uFEFF" + lines.join("\r\n"), "text/csv;charset=utf-8");
+  download(`${PROFILE.id === "nk" ? "" : PROFILE.id + "_"}ledger_${ymOf(y, m)}.csv`, "\uFEFF" + lines.join("\r\n"), "text/csv;charset=utf-8");
   markExported(ymOf(y, m));
   renderBanner();
   toast(`${m + 1}월 CSV를 저장했어요`);
 }
 
 function backup() {
-  download(`ledger_backup_${ymd(new Date())}.json`, JSON.stringify({ version: 1, tx: state.tx }, null, 2), "application/json");
+  download(`${PROFILE.id === "nk" ? "" : PROFILE.id + "_"}ledger_backup_${ymd(new Date())}.json`, JSON.stringify({ version: 1, tx: state.tx }, null, 2), "application/json");
 }
 
 async function restore(file) {
@@ -652,7 +692,7 @@ $("#btn-export").onclick = () => exportCsv();
 $("#btn-backup").onclick = backup;
 $("#restore-file").onchange = (e) => { if (e.target.files[0]) restore(e.target.files[0]); e.target.value = ""; };
 $("#export-banner-close").onclick = () => {
-  sessionStorageSet("bannerClosed", $("#export-banner-text").textContent);
+  sessionStorageSet(`${PROFILE.keyPrefix}.bannerClosed`, $("#export-banner-text").textContent);
   $("#export-banner").hidden = true;
 };
 
@@ -663,6 +703,7 @@ $("#btn-import").onclick = () => {
   $("#import-preview").innerHTML = "";
   $("#import-confirm").disabled = true;
   $("#import-file").value = "";
+  $("#sms-date").value = ymd(new Date());
   $("#import-dialog").showModal();
 };
 document.querySelectorAll(".tab").forEach((tab) => (tab.onclick = () => {
@@ -672,10 +713,13 @@ document.querySelectorAll(".tab").forEach((tab) => (tab.onclick = () => {
 $("#import-file").onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  try { prepareImport(parseSheet(await readSheetRows(file))); }
+  try {
+    const card = $("#import-card").value || CARD_METHOD;
+    prepareImport(parseSheet(await readSheetRows(file)).map((it) => ({ ...it, method: card })));
+  }
   catch (err) { $("#import-preview").innerHTML = `<p class="cancel">${escapeHtml(err.message)}</p>`; }
 };
-$("#sms-parse").onclick = () => prepareImport(parseSms($("#sms-text").value));
+$("#sms-parse").onclick = () => prepareImport(PROFILE.id === "hj" ? parseSmsHJ($("#sms-text").value, $("#sms-date").value || ymd(new Date())) : parseSms($("#sms-text").value));
 $("#sms-reset").onclick = () => {
   $("#sms-text").value = "";
   $("#import-preview").innerHTML = "";

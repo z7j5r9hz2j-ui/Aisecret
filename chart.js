@@ -1,11 +1,11 @@
 "use strict";
 
 // ---------- 월별 지출 그래프 ----------
-// 최근 12개월을 누적 막대로 보여준다. 결제수단(삼성카드/현금·기타) 또는 카테고리로 나눠 볼 수 있다.
+// 최근 12개월을 누적 막대로 보여준다. 결제수단(카드별/현금·기타) 또는 카테고리로 나눠 볼 수 있다.
 const CHART_MONTHS = 12;
-const CHART_MODE_KEY = "ledger.chartMode.v1";
+const CHART_MODE_KEY = `${PROFILE.keyPrefix}.chartMode.v1`;
 // 카테고리 색은 순위가 아니라 카테고리에 고정 (달을 옮겨도 색이 바뀌지 않게)
-const CHART_CATS = ["식비", "카페·간식", "교통", "쇼핑", "생활·마트", "주거·통신", "보험"];
+const CHART_CATS = PROFILE.chartCats;
 const CHART_OTHER = "그 외";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -18,15 +18,12 @@ function chartSeries() {
   if (chartState.mode === "category") {
     return [...CHART_CATS, CHART_OTHER].map((name, i) => ({ key: name, name, color: `var(--s${i + 1})` }));
   }
-  return [
-    { key: "card", name: "삼성카드", color: "var(--s1)" },
-    { key: "cash", name: "현금·기타", color: "var(--s2)" },
-  ];
+  return [...PROFILE.cards, "현금·기타"].map((name, i) => ({ key: i < PROFILE.cards.length ? name : "cash", name, color: `var(--s${i + 1})` }));
 }
 
 function seriesKeyOf(t) {
   if (chartState.mode === "category") return CHART_CATS.includes(t.category) ? t.category : CHART_OTHER;
-  return isCard(t) ? "card" : "cash";
+  return isCard(t) ? t.method : "cash";
 }
 
 // 보고 있는 달과 이번 달 중 늦은 달까지 12개월 (지난달을 눌러도 그래프가 밀리지 않게)
