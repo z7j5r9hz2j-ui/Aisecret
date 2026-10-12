@@ -5,11 +5,18 @@ veebartech.ca 디자인(색상·그라디언트·둥근 카드·알약형 버튼
 ```bash
 cd ppt-template
 npm install
-npm run build   # → VeebarTech_Quality_Report.pptx
+npm run build                  # 품질 보고서 → VeebarTech_Quality_Report.pptx
+npm run build:troubleshooting  # 설비 문제 해결 경과 보고 → VeebarTech_Troubleshooting_Report.pptx
 ```
 
-- `content.js` — 보고서 내용. 실제 품질보고서 내용으로 이 파일만 바꾸면 같은 디자인으로 다시 만들어집니다 (현재 수치는 예시).
-- `build.js` — 디자인 토큰과 슬라이드 레이아웃.
+| 덱 | 내용 파일 | 생성 스크립트 |
+|---|---|---|
+| 품질 보고서 | `content.js` | `build.js` |
+| 설비 문제 해결 경과 보고 (가설 → 실행 → 결과, 시간순) | `content-troubleshooting.js` | `build-troubleshooting.js` |
+
+- 내용 파일만 바꾸면 같은 디자인으로 다시 만들어집니다 (현재 수치는 모두 예시).
+- 문제 해결 보고서의 `items` 판정 값: `rejected`(기각) · `partial`(부분 효과) · `confirmed`(원인 확인) · `fixed`(대책 완료).
+- `lib.js` — 디자인 토큰, 공통 컴포넌트, 슬라이드 마스터.
 - 슬라이드 마스터 3종(`VEEBAR_LIGHT`, `VEEBAR_CONTENT`, `VEEBAR_GRADIENT`)이 포함되어 PowerPoint의 "새 슬라이드"에서도 쓸 수 있습니다.
 
 | 토큰 | 값 | 용도 |

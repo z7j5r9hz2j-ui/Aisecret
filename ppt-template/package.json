@@ -3,7 +3,8 @@
   "private": true,
   "description": "Veebar Tech branded PowerPoint template generator",
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "build:troubleshooting": "node build-troubleshooting.js"
   },
   "dependencies": {
     "pptxgenjs": "^3.12.0",
